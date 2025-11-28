@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>工作委託平台</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 { color: #333; text-align: center; }
+        h2 { color: #666; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0 15px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover { background: #5568d3; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>🚀 工作委託平台</h1>
+    
+    <!-- 登入註冊 -->
+    <div id="auth" class="card">
+        <h2>登入 / 註冊</h2>
+        <input type="text" id="username" placeholder="帳號">
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="密碼">
+        <select id="role">
+            <option value="client">委託人</option>
+            <option value="contractor">接案人</option>
+        </select>
+        <button onclick="doRegister()">註冊</button>
+        <button onclick="doLogin()">登入</button>
+    </div>
+
+    <!-- 委託人 -->
+    <div id="client" class="card hidden">
+        <h2>委託人面板</h2>
+        <p>使用者：<strong id="clientName"></strong></p>
+        <h3>建立專案</h3>
+        <input type="text" id="title" placeholder="專案標題">
+        <textarea id="desc" placeholder="專案描述"></textarea>
+        <input type="number" id="budget" placeholder="預算">
+        <button onclick="createProject()">建立專案</button>
+        <button onclick="loadMyProjects()">查看我的專案</button>
+        <div id="clientProjects"></div>
+        <button onclick="doLogout()">登出</button>
+    </div>
+
+    <!-- 接案人 -->
+    <div id="contractor" class="card hidden">
+        <h2>接案人面板</h2>
+        <p>使用者：<strong id="contractorName"></strong></p>
+        <button onclick="loadOpenProjects()">瀏覽專案</button>
+        <div id="openProjects"></div>
+        <button onclick="loadMyProjects()">我的專案</button>
+        <div id="contractorProjects"></div>
+        <button onclick="doLogout()">登出</button>
+    </div>
+
+    <script>
+        const API = 'http://127.0.0.1:8080';
+        let user = null;
+
+        function doRegister() {
+            const data = {
+                username: document.getElementById('username').value,
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+                role: document.getElementById('role').value
+            };
+
+            fetch(API + '/auth/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(r => r.json())
+            .then(d => {
+                alert('註冊成功！請登入');
+            })
+            .catch(e => alert('錯誤：' + e));
+        }
+
+        function doLogin() {
+            const data = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+
+            fetch(API + '/auth/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(r => r.json())
+            .then(d => {
+                user = d.user;
+                document.getElementById('auth').classList.add('hidden');
+                
+                if (user.role === 'client') {
+                    document.getElementById('client').classList.remove('hidden');
+                    document.getElementById('clientName').textContent = user.username;
+                } else {
+                    document.getElementById('contractor').classList.remove('hidden');
+                    document.getElementById('contractorName').textContent = user.username;
+                }
+            })
+            .catch(e => alert('登入失敗'));
+        }
+
+        function doLogout() {
+            user = null;
+            document.getElementById('auth').classList.remove('hidden');
+            document.getElementById('client').classList.add('hidden');
+            document.getElementById('contractor').classList.add('hidden');
+        }
+
+        function createProject() {
+            const data = {
+                title: document.getElementById('title').value,
+                description: document.getElementById('desc').value,
+                budget: parseFloat(document.getElementById('budget').value)
+            };
+
+            fetch(API + '/projects/?client_id=' + user.id, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(r => r.json())
+            .then(d => {
+                alert('專案建立成功！');
+                loadMyProjects();
+            });
+        }
+
+        function loadMyProjects() {
+            fetch(API + '/projects/user/' + user.id)
+            .then(r => r.json())
+            .then(projects => {
+                const html = projects.map(p => 
+                    `<div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:3px solid #667eea;">
+                        <strong>${p.title}</strong><br>
+                        ${p.description}<br>
+                        預算: ${p.budget} | 狀態: ${p.status}
+                        ${getActions(p)}
+                    </div>`
+                ).join('');
+                
+                if (user.role === 'client') {
+                    document.getElementById('clientProjects').innerHTML = html;
+                } else {
+                    document.getElementById('contractorProjects').innerHTML = html;
+                }
+            });
+        }
+
+        function loadOpenProjects() {
+            fetch(API + '/projects/')
+            .then(r => r.json())
+            .then(projects => {
+                const html = projects.map(p => 
+                    `<div style="background:#f9f9f9; padding:10px; margin:10px 0;">
+                        <strong>${p.title}</strong><br>
+                        ${p.description}<br>
+                        預算: ${p.budget}
+                        <button onclick="makeProposal(${p.id})">提出報價</button>
+                    </div>`
+                ).join('');
+                document.getElementById('openProjects').innerHTML = html;
+            });
+        }
+
+        function makeProposal(pid) {
+            const price = prompt('報價金額：');
+            const desc = prompt('提案說明：');
+            
+            fetch(API + '/projects/' + pid + '/proposals?contractor_id=' + user.id, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({project_id: pid, price: parseFloat(price), description: desc})
+            })
+            .then(r => r.json())
+            .then(d => alert('提案已送出！'));
+        }
+
+        function selectContractor(pid) {
+            fetch(API + '/projects/' + pid + '/proposals')
+            .then(r => r.json())
+            .then(proposals => {
+                const list = proposals.map((p, i) => `${i+1}. ID:${p.contractor_id} - $${p.price}`).join('\n');
+                const choice = prompt('選擇接案人：\n' + list);
+                if (choice) {
+                    const selected = proposals[parseInt(choice)-1];
+                    fetch(API + '/projects/' + pid + '/select-contractor?contractor_id=' + selected.contractor_id, {method: 'POST'})
+                    .then(() => {
+                        alert('已選擇接案人！');
+                        loadMyProjects();
+                    });
+                }
+            });
+        }
+
+        function submitWork(pid) {
+            const url = prompt('結案檔案網址：');
+            fetch(API + '/projects/' + pid + '/submit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({submission_file_url: url})
+            })
+            .then(() => {
+                alert('已提交！');
+                loadMyProjects();
+            });
+        }
+
+        function acceptWork(pid) {
+            fetch(API + '/projects/' + pid + '/accept', {method: 'POST'})
+            .then(() => {
+                alert('已接受結案！');
+                loadMyProjects();
+            });
+        }
+
+        function rejectWork(pid) {
+            const reason = prompt('退件原因：');
+            fetch(API + '/projects/' + pid + '/reject', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({rejection_reason: reason})
+            })
+            .then(() => {
+                alert('已退件！');
+                loadMyProjects();
+            });
+        }
+        function editProject(pid) {
+            // 先取得專案資料
+            fetch(API + '/projects/' + pid)
+            .then(r => r.json())
+            .then(project => {
+                const newTitle = prompt('修改標題：', project.title);
+                if (!newTitle) return;
+                
+                const newDesc = prompt('修改描述：', project.description);
+                if (!newDesc) return;
+                
+                const newBudget = prompt('修改預算：', project.budget);
+                if (!newBudget) return;
+                
+                // 送出更新
+                fetch(API + '/projects/' + pid, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        title: newTitle,
+                        description: newDesc,
+                        budget: parseFloat(newBudget)
+                    })
+                })
+                .then(r => r.json())
+                .then(() => {
+                    alert('專案已更新！');
+                    loadMyProjects();
+                })
+                .catch(e => alert('更新失敗：' + e));
+            });
+        }
+        function getActions(p) {
+            if (user.role === 'client') {
+                if (p.status === 'open') {
+                    return `<br>
+                        <button onclick="editProject(${p.id})">修改專案</button>
+                        <button onclick="selectContractor(${p.id})">選擇接案人</button>`;
+                } else if (p.status === 'submitted') {
+                    return `<br><button onclick="acceptWork(${p.id})">接受</button> <button onclick="rejectWork(${p.id})">退件</button>`;
+                }
+            } else {
+                // 接案人的操作
+                if (p.contractor_id === user.id) {
+                    if (p.status === 'in_progress') {
+                        return `<br><button onclick="submitWork(${p.id})">上傳結案</button>`;
+                    } else if (p.status === 'rejected') {
+                        return `<br><button onclick="submitWork(${p.id})" style="background:#ff9800;">重新提交結案</button>`;
+                    }
+                }
+            }
+            return '';
+        }
+    </script>
+</body>
+</html>
