@@ -41,12 +41,27 @@
         }
         button:hover { background: #5568d3; }
         .hidden { display: none; }
+        .sub-btn {
+            width: auto;
+            padding: 6px 10px;
+            margin-top: 5px;
+            font-size: 13px;
+        }
+        .version-list {
+            margin-top: 6px;
+            font-size: 13px;
+            padding-left: 4px;
+            border-left: 2px solid #ccc;
+        }
+        .version-list a {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <h1>🚀 工作委託平台</h1>
     
-    <!-- 登入註冊 -->
+    <!-- 登入 / 註冊 -->
     <div id="auth" class="card">
         <h2>登入 / 註冊</h2>
         <input type="text" id="username" placeholder="帳號">
@@ -68,6 +83,10 @@
         <input type="text" id="title" placeholder="專案標題">
         <textarea id="desc" placeholder="專案描述"></textarea>
         <input type="number" id="budget" placeholder="預算">
+        <!-- 限時競標截止時間 -->
+        <label for="deadline">截止時間（限時競標）：</label>
+        <input type="datetime-local" id="deadline">
+
         <button onclick="createProject()">建立專案</button>
         <button onclick="loadMyProjects()">查看我的專案</button>
         <div id="clientProjects"></div>
@@ -89,6 +108,8 @@
         const API = 'http://127.0.0.1:8080';
         let user = null;
 
+        // ================== 身分驗證 ==================
+
         function doRegister() {
             const data = {
                 username: document.getElementById('username').value,
@@ -103,7 +124,7 @@
                 body: JSON.stringify(data)
             })
             .then(r => r.json())
-            .then(d => {
+            .then(() => {
                 alert('註冊成功！請登入');
             })
             .catch(e => alert('錯誤：' + e));
@@ -123,6 +144,10 @@
             .then(r => r.json())
             .then(d => {
                 user = d.user;
+                if (!user) {
+                    alert('登入失敗');
+                    return;
+                }
                 document.getElementById('auth').classList.add('hidden');
                 
                 if (user.role === 'client') {
@@ -133,7 +158,7 @@
                     document.getElementById('contractorName').textContent = user.username;
                 }
             })
-            .catch(e => alert('登入失敗'));
+            .catch(() => alert('登入失敗'));
         }
 
         function doLogout() {
@@ -143,12 +168,27 @@
             document.getElementById('contractor').classList.add('hidden');
         }
 
+        // ================== 專案建立 / 查詢 ==================
+
         function createProject() {
-            const data = {
-                title: document.getElementById('title').value,
-                description: document.getElementById('desc').value,
-                budget: parseFloat(document.getElementById('budget').value)
-            };
+            const title = document.getElementById('title').value;
+            const desc = document.getElementById('desc').value;
+            const budget = parseFloat(document.getElementById('budget').value);
+
+			const deadlineInput = document.getElementById('deadline').value;
+			let deadline = null;
+			if (deadlineInput) {
+				// 直接傳字串，不轉時區
+				deadline = deadlineInput + ':00';    // "2025-12-02T17:00:00"
+			}
+
+			const data = {
+				title: title,
+				description: desc,
+				budget: budget,
+				deadline: deadline
+			};
+
 
             fetch(API + '/projects/?client_id=' + user.id, {
                 method: 'POST',
@@ -156,22 +196,39 @@
                 body: JSON.stringify(data)
             })
             .then(r => r.json())
-            .then(d => {
+            .then(() => {
                 alert('專案建立成功！');
                 loadMyProjects();
             });
+        }
+
+        function formatDeadline(deadline) {
+            if (!deadline) return '未設定';
+            try {
+                return new Date(deadline).toLocaleString();
+            } catch {
+                return deadline;
+            }
         }
 
         function loadMyProjects() {
             fetch(API + '/projects/user/' + user.id)
             .then(r => r.json())
             .then(projects => {
-                const html = projects.map(p => 
+                const html = projects.map(p =>
                     `<div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:3px solid #667eea;">
                         <strong>${p.title}</strong><br>
                         ${p.description}<br>
-                        預算: ${p.budget} | 狀態: ${p.status}
+                        預算: ${p.budget ?? '未設定'} |
+                        狀態: ${p.status}<br>
+                        截止時間: ${formatDeadline(p.deadline)}<br>
+                        最新結案網址: ${
+							p.submission_file_url
+							  ? `<a href="${API}${p.submission_file_url}" target="_blank" rel="noopener">下載</a>`
+							  : '尚未結案'
+						}
                         ${getActions(p)}
+                        <div id="versions-${p.id}" class="version-list"></div>
                     </div>`
                 ).join('');
                 
@@ -187,40 +244,96 @@
             fetch(API + '/projects/')
             .then(r => r.json())
             .then(projects => {
-                const html = projects.map(p => 
+                const html = projects.map(p =>
                     `<div style="background:#f9f9f9; padding:10px; margin:10px 0;">
                         <strong>${p.title}</strong><br>
                         ${p.description}<br>
-                        預算: ${p.budget}
-                        <button onclick="makeProposal(${p.id})">提出報價</button>
+                        預算: ${p.budget ?? '未設定'}<br>
+                        截止時間: ${formatDeadline(p.deadline)}<br><br>
+                        報價金額：<input type="number" id="price-${p.id}" placeholder="金額"><br>
+                        提案說明：<input type="text" id="pdesc-${p.id}" placeholder="簡短說明"><br>
+                        上傳提案 PDF：<input type="file" id="pfile-${p.id}" accept="application/pdf"><br>
+                        <button class="sub-btn" onclick="makeProposal(${p.id})">提出報價</button>
                     </div>`
                 ).join('');
                 document.getElementById('openProjects').innerHTML = html;
             });
         }
 
-        function makeProposal(pid) {
-            const price = prompt('報價金額：');
-            const desc = prompt('提案說明：');
-            
-            fetch(API + '/projects/' + pid + '/proposals?contractor_id=' + user.id, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({project_id: pid, price: parseFloat(price), description: desc})
-            })
-            .then(r => r.json())
-            .then(d => alert('提案已送出！'));
+        // ================== 提案（含 PDF 上傳） ==================
+
+        async function makeProposal(pid) {
+            const priceInput = document.getElementById(`price-${pid}`);
+            const descInput  = document.getElementById(`pdesc-${pid}`);
+            const fileInput  = document.getElementById(`pfile-${pid}`);
+
+            const priceVal = parseFloat(priceInput.value);
+            const desc = descInput.value;
+            const file = fileInput.files[0];
+
+            if (isNaN(priceVal)) {
+                alert('請輸入有效的報價金額');
+                return;
+            }
+            if (!file) {
+                alert('請選擇要上傳的 PDF 檔案');
+                return;
+            }
+            if (file.type !== 'application/pdf') {
+                alert('僅接受 PDF 檔案');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('price', priceVal);
+            formData.append('description', desc);
+            formData.append('file', file);
+
+            try {
+                const resp = await fetch(
+                    API + '/projects/' + pid + '/proposals?contractor_id=' + user.id,
+                    {
+                        method: 'POST',
+                        body: formData
+                    }
+                );
+
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    alert('提案失敗：' + (data.detail || JSON.stringify(data)));
+                    return;
+                }
+
+                alert('提案已送出！(ID: ' + (data.proposal_id || '') + ')');
+            } catch (e) {
+                alert('提案失敗(網路錯誤)：' + e);
+            }
         }
 
+        // ================== 選擇接案人 & 結案 ==================
+
         function selectContractor(pid) {
-            fetch(API + '/projects/' + pid + '/proposals')
+            fetch(API + `/projects/${pid}/proposals`)
             .then(r => r.json())
             .then(proposals => {
-                const list = proposals.map((p, i) => `${i+1}. ID:${p.contractor_id} - $${p.price}`).join('\n');
+                if (proposals.length === 0) {
+                    alert('目前沒有任何提案');
+                    return;
+                }
+                const list = proposals.map((p, i) =>
+                    `${i+1}. 提案ID:${p.id} / 接案人ID:${p.contractor_id} - $${p.price}`
+                ).join('\n');
                 const choice = prompt('選擇接案人：\n' + list);
                 if (choice) {
                     const selected = proposals[parseInt(choice)-1];
-                    fetch(API + '/projects/' + pid + '/select-contractor?contractor_id=' + selected.contractor_id, {method: 'POST'})
+                    if (!selected) {
+                        alert('選擇無效');
+                        return;
+                    }
+                    fetch(API + `/projects/${pid}/select-contractor?contractor_id=${selected.contractor_id}`, {
+                        method: 'POST'
+                    })
                     .then(() => {
                         alert('已選擇接案人！');
                         loadMyProjects();
@@ -229,21 +342,37 @@
             });
         }
 
-        function submitWork(pid) {
-            const url = prompt('結案檔案網址：');
-            fetch(API + '/projects/' + pid + '/submit', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({submission_file_url: url})
-            })
-            .then(() => {
-                alert('已提交！');
+        async function submitWork(pid) {
+            const fileInput = document.getElementById(`submit-file-${pid}`);
+            if (!fileInput || fileInput.files.length === 0) {
+                alert('請先選擇要上傳的結案檔案');
+                return;
+            }
+            const file = fileInput.files[0];
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const resp = await fetch(API + `/projects/${pid}/submit`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({}));
+                    throw new Error(data.detail || resp.statusText);
+                }
+
+                alert('已提交結案！');
                 loadMyProjects();
-            });
+            } catch (e) {
+                alert('上傳失敗：' + e);
+            }
         }
 
         function acceptWork(pid) {
-            fetch(API + '/projects/' + pid + '/accept', {method: 'POST'})
+            fetch(API + `/projects/${pid}/accept`, {method: 'POST'})
             .then(() => {
                 alert('已接受結案！');
                 loadMyProjects();
@@ -252,7 +381,9 @@
 
         function rejectWork(pid) {
             const reason = prompt('退件原因：');
-            fetch(API + '/projects/' + pid + '/reject', {
+            if (!reason) return;
+
+            fetch(API + `/projects/${pid}/reject`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({rejection_reason: reason})
@@ -262,28 +393,107 @@
                 loadMyProjects();
             });
         }
+
+        // ================== 結案版本列表（下載連結） ==================
+
+        function showSubmissionVersions(pid) {
+            fetch(API + `/projects/${pid}/submissions`)
+            .then(r => r.json())
+            .then(data => {
+                let list = [];
+                if (Array.isArray(data)) {
+                    list = data;
+                } else if (data && Array.isArray(data.versions)) {
+                    list = data.versions;
+                }
+
+                const container = document.getElementById(`versions-${pid}`);
+
+                if (!list || list.length === 0) {
+                    container.innerHTML = '目前沒有任何結案版本';
+                    return;
+                }
+
+                const html = list.map(v =>
+					`<div>v${v.version}：<a href="${API}${v.submit_url}" target="_blank" rel="noopener">下載</a></div>`
+				).join('');
+
+
+                container.innerHTML = html;
+            })
+            .catch(e => {
+                alert('讀取版本列表失敗：' + e);
+            });
+        }
+
+        // ================== 按鈕顯示邏輯 ==================
+
+        function getActions(p) {
+            if (user.role === 'client') {
+                if (p.status === 'open') {
+                    return `<br>
+                        <button class="sub-btn" onclick="editProject(${p.id})">修改專案</button>
+                        <button class="sub-btn" onclick="selectContractor(${p.id})">選擇接案人</button>`;
+                } else if (p.status === 'submitted') {
+                    return `<br>
+                        <button class="sub-btn" onclick="acceptWork(${p.id})">接受</button>
+                        <button class="sub-btn" onclick="rejectWork(${p.id})">退件</button>
+                        <button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
+                } else if (p.status === 'completed' || p.status === 'rejected') {
+                    return `<br>
+                        <button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
+                }
+            } else {
+                if (p.contractor_id === user.id) {
+                    if (p.status === 'in_progress' || p.status === 'rejected') {
+                        return `<br>
+                            <input type="file" id="submit-file-${p.id}">
+                            <button class="sub-btn" onclick="submitWork(${p.id})">
+                                ${p.status === 'rejected' ? '重新上傳結案' : '上傳結案'}
+                            </button>
+                            <button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
+                    } else if (p.status === 'completed' || p.status === 'submitted') {
+                        return `<br>
+                            <button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
+                    }
+                }
+            }
+            return '';
+        }
+
+        // ================== 修改專案 ==================
+
         function editProject(pid) {
-            // 先取得專案資料
-            fetch(API + '/projects/' + pid)
+            fetch(API + `/projects/${pid}`)
             .then(r => r.json())
             .then(project => {
                 const newTitle = prompt('修改標題：', project.title);
                 if (!newTitle) return;
-                
+
                 const newDesc = prompt('修改描述：', project.description);
                 if (!newDesc) return;
-                
+
                 const newBudget = prompt('修改預算：', project.budget);
                 if (!newBudget) return;
-                
-                // 送出更新
-                fetch(API + '/projects/' + pid, {
+
+				const newDeadlineRaw = prompt(
+					'修改截止時間 (原值：' + formatDeadline(project.deadline) + ')\n格式：YYYY-MM-DD HH:MM，留空表示不變'
+				);
+				let deadline = project.deadline;
+				if (newDeadlineRaw) {
+					const safe = newDeadlineRaw.replace(' ', 'T');
+					deadline = safe + ':00';  // 一樣不轉 ISO，只補秒
+				}
+
+
+                fetch(API + `/projects/${pid}`, {
                     method: 'PUT',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         title: newTitle,
                         description: newDesc,
-                        budget: parseFloat(newBudget)
+                        budget: parseFloat(newBudget),
+                        deadline: deadline
                     })
                 })
                 .then(r => r.json())
@@ -293,27 +503,6 @@
                 })
                 .catch(e => alert('更新失敗：' + e));
             });
-        }
-        function getActions(p) {
-            if (user.role === 'client') {
-                if (p.status === 'open') {
-                    return `<br>
-                        <button onclick="editProject(${p.id})">修改專案</button>
-                        <button onclick="selectContractor(${p.id})">選擇接案人</button>`;
-                } else if (p.status === 'submitted') {
-                    return `<br><button onclick="acceptWork(${p.id})">接受</button> <button onclick="rejectWork(${p.id})">退件</button>`;
-                }
-            } else {
-                // 接案人的操作
-                if (p.contractor_id === user.id) {
-                    if (p.status === 'in_progress') {
-                        return `<br><button onclick="submitWork(${p.id})">上傳結案</button>`;
-                    } else if (p.status === 'rejected') {
-                        return `<br><button onclick="submitWork(${p.id})" style="background:#ff9800;">重新提交結案</button>`;
-                    }
-                }
-            }
-            return '';
         }
     </script>
 </body>
