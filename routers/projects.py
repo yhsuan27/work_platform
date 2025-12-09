@@ -71,6 +71,8 @@ def submit_project(
 
 @router.post("/{project_id}/accept", response_model=schemas.Project)
 def accept_project(project_id: int, db: Session = Depends(get_db)):
+    if crud.has_open_issues(db, project_id): # 新增
+        raise HTTPException(status_code=400, detail="仍有未處理的 issue，無法結案")
     """接受結案（委託人）"""
     project = crud.accept_project(db, project_id)
     if not project:
@@ -106,3 +108,53 @@ def create_proposal(
 def get_proposals(project_id: int, db: Session = Depends(get_db)):
     """查看專案的所有提案（委託人）"""
     return crud.get_project_proposals(db, project_id)
+
+# ==================== Issue相關 ====================(新增)
+@router.post("/{project_id}/issues", response_model=schemas.Issue)
+def create_issue(
+    project_id: int,
+    issue: schemas.IssueCreate,
+    creator_id: int,              
+    db: Session = Depends(get_db)
+):
+    db_issue = crud.create_issue(db, project_id, creator_id, issue)
+    if not db_issue:
+        raise HTTPException(status_code=400, detail="無法建立 issue（專案不存在或狀態不允許）")
+    return db_issue
+
+# 列出專案的所有 Issue
+@router.get("/{project_id}/issues", response_model=List[schemas.Issue])
+def get_issues(project_id: int, db: Session = Depends(get_db)):
+    return crud.get_project_issues(db, project_id)
+
+# 甲乙雙方在 Issue 底下留言
+@router.post("/{project_id}/issues/{issue_id}/comments", response_model=schemas.IssueComment)
+def create_issue_comment(
+    project_id: int,
+    issue_id: int,
+    comment: schemas.IssueCommentCreate,
+    sender_id: int,
+    db: Session = Depends(get_db)
+):
+    db_comment = crud.create_issue_comment(db, issue_id, sender_id, comment.content)
+    if not db_comment:
+        raise HTTPException(status_code=404, detail="Issue 不存在")
+    return db_comment
+
+# 取得 Issue 底下所有留言
+@router.get("/{project_id}/issues/{issue_id}/comments", response_model=List[schemas.IssueComment])
+def get_issue_comments(project_id: int, issue_id: int, db: Session = Depends(get_db)):
+    return crud.get_issue_comments(db, issue_id)
+
+# 甲方將 Issue 設為已處理完成
+@router.post("/{project_id}/issues/{issue_id}/resolve", response_model=schemas.Issue)
+def resolve_issue(
+    project_id: int,
+    issue_id: int,
+    resolver_id: int,
+    db: Session = Depends(get_db)
+):
+    db_issue = crud.resolve_issue(db, issue_id, resolver_id)
+    if not db_issue:
+        raise HTTPException(status_code=400, detail="無法將 issue 設為已完成（權限或資料錯誤）")
+    return db_issue

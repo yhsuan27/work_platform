@@ -85,9 +85,17 @@
         <button onclick="doLogout()">登出</button>
     </div>
 
+    <!-- Issue 面板 -->
+    <div id="issuePanel" class="card hidden">
+        <h2>Issue / 結案待處理事項</h2>
+        <button onclick="closeIssuePanel()">關閉</button>
+        <div id="issueContent" style="margin-top: 10px;"></div>
+    </div>
+
     <script>
         const API = 'http://127.0.0.1:8080';
         let user = null;
+        let currentIssueProjectId = null; // 目前正在查看 Issue 的專案 ID
 
         function doRegister() {
             const data = {
@@ -141,6 +149,7 @@
             document.getElementById('auth').classList.remove('hidden');
             document.getElementById('client').classList.add('hidden');
             document.getElementById('contractor').classList.add('hidden');
+            closeIssuePanel();
         }
 
         function createProject() {
@@ -244,10 +253,26 @@
 
         function acceptWork(pid) {
             fetch(API + '/projects/' + pid + '/accept', {method: 'POST'})
+            .then(async r => {
+                if (!r.ok) {
+                    let err = {};
+                    try { err = await r.json(); } catch (_) {}
+                    if (r.status === 400 && err.detail) {
+                        alert('無法結案：' + err.detail);
+                        // 若因為有未處理 Issue 無法結案，幫你打開 Issue 面板
+                        viewIssues(pid);
+                    } else {
+                        alert('接受結案失敗');
+                    }
+                    throw new Error('accept failed');
+                }
+                return r.json();
+            })
             .then(() => {
                 alert('已接受結案！');
                 loadMyProjects();
-            });
+            })
+            .catch(e => console.log(e));
         }
 
         function rejectWork(pid) {
@@ -262,6 +287,7 @@
                 loadMyProjects();
             });
         }
+
         function editProject(pid) {
             // 先取得專案資料
             fetch(API + '/projects/' + pid)
@@ -294,6 +320,149 @@
                 .catch(e => alert('更新失敗：' + e));
             });
         }
+
+        // ========== Issue 前端功能 ==========
+
+        function closeIssuePanel() {
+            document.getElementById('issuePanel').classList.add('hidden');
+            document.getElementById('issueContent').innerHTML = '';
+            currentIssueProjectId = null;
+        }
+
+        function createIssue(pid) {
+            const title = prompt('Issue 標題：');
+            if (!title) return;
+            const desc = prompt('Issue 描述（可留空）：') || '';
+            
+            fetch(API + '/projects/' + pid + '/issues?creator_id=' + user.id, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title: title, description: desc})
+            })
+            .then(async r => {
+                if (!r.ok) {
+                    let err = {};
+                    try { err = await r.json(); } catch (_) {}
+                    throw err;
+                }
+                return r.json();
+            })
+            .then(issue => {
+                alert('Issue 已建立！');
+                viewIssues(pid);
+            })
+            .catch(e => alert('建立 Issue 失敗：' + (e.detail || JSON.stringify(e))));
+        }
+
+        function viewIssues(pid) {
+            currentIssueProjectId = pid;
+            fetch(API + '/projects/' + pid + '/issues')
+            .then(r => r.json())
+            .then(issues => {
+                const container = document.getElementById('issueContent');
+                let html = `<p>專案 ID: ${pid} 的 Issue 列表</p>`;
+                
+                if (user.role === 'client') {
+                    html += `<button onclick="createIssue(${pid})">＋ 新增 Issue</button>`;
+                }
+
+                if (issues.length === 0) {
+                    html += `<p style="margin-top:10px;">目前尚無 Issue。</p>`;
+                } else {
+                    html += issues.map(i => `
+                        <div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:3px solid ${i.status === 'open' ? '#ff9800' : '#4caf50'};">
+                            <strong>[${i.status === 'open' ? '待處理' : '已完成'}] ${i.title}</strong><br>
+                            ${i.description || ''}<br>
+                            建立時間：${new Date(i.created_at).toLocaleString()}<br>
+                            ${i.resolved_at ? '完成時間：' + new Date(i.resolved_at).toLocaleString() + '<br>' : ''}
+                            <button onclick="showIssueComments(${i.id})">查看留言</button>
+                            <button onclick="addIssueComment(${i.id})">新增留言</button>
+                            ${user.role === 'client' && i.status === 'open'
+                                ? `<button onclick="resolveIssue(${i.id})">標記為已完成</button>`
+                                : ''}
+                        </div>
+                    `).join('');
+                }
+
+                container.innerHTML = html;
+                document.getElementById('issuePanel').classList.remove('hidden');
+            });
+        }
+
+        function showIssueComments(issueId) {
+            if (!currentIssueProjectId) {
+                alert('請先從專案打開 Issue 列表');
+                return;
+            }
+            fetch(API + '/projects/' + currentIssueProjectId + '/issues/' + issueId + '/comments')
+            .then(r => r.json())
+            .then(comments => {
+                if (comments.length === 0) {
+                    alert('目前沒有留言');
+                    return;
+                }
+                const text = comments.map(c => 
+                    `#${c.id} 來自使用者 ${c.sender_id}：\n${c.content}\n時間：${new Date(c.created_at).toLocaleString()}`
+                ).join('\n\n---\n\n');
+                alert(text);
+            });
+        }
+
+        function addIssueComment(issueId) {
+            if (!currentIssueProjectId) {
+                alert('請先從專案打開 Issue 列表');
+                return;
+            }
+            const content = prompt('留言內容：');
+            if (!content) return;
+
+            fetch(API + '/projects/' + currentIssueProjectId + '/issues/' + issueId + '/comments?sender_id=' + user.id, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({content: content})
+            })
+            .then(async r => {
+                if (!r.ok) {
+                    let err = {};
+                    try { err = await r.json(); } catch (_) {}
+                    throw err;
+                }
+                return r.json();
+            })
+            .then(() => {
+                alert('留言已送出！');
+            })
+            .catch(e => alert('留言失敗：' + (e.detail || JSON.stringify(e))));
+        }
+
+        function resolveIssue(issueId) {
+            if (!currentIssueProjectId) {
+                alert('請先從專案打開 Issue 列表');
+                return;
+            }
+            if (!confirm('確認將此 Issue 標記為已完成？')) return;
+
+            fetch(API + '/projects/' + currentIssueProjectId + '/issues/' + issueId + '/resolve?resolver_id=' + user.id, {
+                method: 'POST'
+            })
+            .then(async r => {
+                if (!r.ok) {
+                    let err = {};
+                    try { err = await r.json(); } catch (_) {}
+                    throw err;
+                }
+                return r.json();
+            })
+            .then(() => {
+                alert('Issue 已標記為完成！');
+                viewIssues(currentIssueProjectId);
+                loadMyProjects();
+            })
+            .catch(e => alert('操作失敗：' + (e.detail || JSON.stringify(e))));
+        }
+
+        // ========== 根據角色與專案狀態顯示按鈕 ==========
+
         function getActions(p) {
             if (user.role === 'client') {
                 if (p.status === 'open') {
@@ -301,7 +470,11 @@
                         <button onclick="editProject(${p.id})">修改專案</button>
                         <button onclick="selectContractor(${p.id})">選擇接案人</button>`;
                 } else if (p.status === 'submitted') {
-                    return `<br><button onclick="acceptWork(${p.id})">接受</button> <button onclick="rejectWork(${p.id})">退件</button>`;
+                    return `<br>
+                        <button onclick="viewIssues(${p.id})">查看 / 管理 Issue</button>
+                        <button onclick="createIssue(${p.id})">新增 Issue</button>
+                        <button onclick="acceptWork(${p.id})">接受</button>
+                        <button onclick="rejectWork(${p.id})">退件</button>`;
                 }
             } else {
                 // 接案人的操作
@@ -310,6 +483,8 @@
                         return `<br><button onclick="submitWork(${p.id})">上傳結案</button>`;
                     } else if (p.status === 'rejected') {
                         return `<br><button onclick="submitWork(${p.id})" style="background:#ff9800;">重新提交結案</button>`;
+                    } else if (p.status === 'submitted') {
+                        return `<br><button onclick="viewIssues(${p.id})">查看 Issue / 討論</button>`;
                     }
                 }
             }
