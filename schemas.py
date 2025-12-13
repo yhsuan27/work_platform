@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr,Field
 from typing import Optional, List
 from datetime import datetime
-from models import UserRole, ProjectStatus
+from models import UserRole, ProjectStatus, IssueStatus #新增IssueStatus
 
 # ==================== User Schemas ====================
 
@@ -65,13 +65,48 @@ class Project(ProjectBase):
     class Config:
         from_attributes = True
 
-class ProjectWithDetails(Project):
-    client: User
-    contractor: Optional[User] = None
-    
+# ==================== Issue Schemas ==============(新增)
+class IssueBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+
+class IssueCreate(IssueBase):
+    pass
+
+class Issue(IssueBase):
+    id: int
+    project_id: int
+    status: IssueStatus
+    created_by_id: int
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
+
+class IssueCommentCreate(BaseModel):
+    content: str
+
+class IssueComment(BaseModel):
+    id: int
+    issue_id: int
+    sender_id: int
+    content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ProjectWithDetails(Project):
+    client: User
+    contractor: Optional[User] = None
+    issues: List[Issue] = []   # 這裡就可以正常使用 Issue 了
+
+    class Config:
+        from_attributes = True
+    
 # ==================== Proposal Schemas ====================
 
 class ProposalBase(BaseModel):

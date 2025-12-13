@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+from datetime import datetime
 import models, schemas
 from auth_utils import get_password_hash, verify_password
 
@@ -155,6 +156,97 @@ def get_project_messages(db: Session, project_id: int):
     return db.query(models.Message).filter(
         models.Message.project_id == project_id
     ).order_by(models.Message.created_at).all()
+
+# ==================== Issue CRUD ====================(新增)
+
+def create_issue(db: Session, project_id: int, creator_id: int, issue_in: schemas.IssueCreate):
+    """建立一筆 Issue（通常由委託方在專案已提交結案後建立）"""
+    project = get_project(db, project_id)
+    if not project:
+        return None
+
+    # 可以依需求限制只有 SUBMITTED 狀態才能建立 issue
+    if project.status != models.ProjectStatus.SUBMITTED:
+        return None
+
+    db_issue = models.Issue(
+        project_id=project_id,
+        title=issue_in.title,
+        description=issue_in.description,
+        created_by_id=creator_id,
+    )
+    db.add(db_issue)
+    db.commit()
+    db.refresh(db_issue)
+    return db_issue
+
+
+def get_project_issues(db: Session, project_id: int):
+    """取得某專案底下的所有 Issues"""
+    return (
+        db.query(models.Issue)
+        .filter(models.Issue.project_id == project_id)
+        .order_by(models.Issue.created_at)
+        .all()
+    )
+
+
+def create_issue_comment(db: Session, issue_id: int, sender_id: int, content: str):
+    """在 Issue 底下新增留言"""
+    issue = db.query(models.Issue).filter(models.Issue.id == issue_id).first()
+    if not issue:
+        return None
+
+    db_comment = models.IssueComment(
+        issue_id=issue_id,
+        sender_id=sender_id,
+        content=content,
+    )
+    db.add(db_comment)
+    db.commit()
+    db.refresh(db_comment)
+    return db_comment
+
+
+def get_issue_comments(db: Session, issue_id: int):
+    """取得 Issue 底下所有留言"""
+    return (
+        db.query(models.IssueComment)
+        .filter(models.IssueComment.issue_id == issue_id)
+        .order_by(models.IssueComment.created_at)
+        .all()
+    )
+
+
+def resolve_issue(db: Session, issue_id: int, resolver_id: int):
+    """由委託方將 Issue 設為已處理完成"""
+    issue = db.query(models.Issue).filter(models.Issue.id == issue_id).first()
+    if not issue:
+        return None
+
+    project = issue.project
+    if project.client_id != resolver_id:
+        # 只有該專案的委託人可以結束 Issue
+        return None
+
+    issue.status = models.IssueStatus.RESOLVED
+    issue.resolved_at = datetime.utcnow()
+    db.commit()
+    db.refresh(issue)
+    return issue
+
+
+def has_open_issues(db: Session, project_id: int) -> bool:
+    """檢查某專案是否仍有未處理的 Issue"""
+    return (
+        db.query(models.Issue)
+        .filter(
+            models.Issue.project_id == project_id,
+            models.Issue.status == models.IssueStatus.OPEN,
+        )
+        .count()
+        > 0
+    )
 
 # ==================== Rating CRUD ====================
 
