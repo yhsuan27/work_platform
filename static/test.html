@@ -41,12 +41,85 @@
         }
         button:hover { background: #5568d3; }
         .hidden { display: none; }
+
+        /* --- 評論列表樣式 --- */
+        .review-box {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px dashed #ccc;
+        }
+        .review-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 15px; 
+        }
+        .review-item {
+            background: #fff;
+            border-left: 4px solid #667eea;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .review-meta {
+            font-size: 0.85em;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        /* --- 彈出視窗 (Modal) 樣式 --- */
+        .modal {
+            position: fixed; 
+            z-index: 1000; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background-color: #fefefe;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        .close-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            position: absolute;
+            right: 15px;
+            top: 10px;
+        }
+        .close-btn:hover { color: #000; }
+
+        /* --- 可點擊文字樣式 --- */
+        .clickable-text {
+            color: #007bff;
+            text-decoration: underline;
+            cursor: pointer;
+            font-weight: normal;
+            margin-left: 5px;
+        }
+        .clickable-text:hover { color: #0056b3; }
     </style>
 </head>
 <body>
     <h1>🚀 工作委託平台</h1>
     
-    <!-- 登入註冊 -->
     <div id="auth" class="card">
         <h2>登入 / 註冊</h2>
         <input type="text" id="username" placeholder="帳號">
@@ -60,10 +133,10 @@
         <button onclick="doLogin()">登入</button>
     </div>
 
-    <!-- 委託人 -->
     <div id="client" class="card hidden">
         <h2>委託人面板</h2>
         <p>使用者：<strong id="clientName"></strong></p>
+        
         <h3>建立專案</h3>
         <input type="text" id="title" placeholder="專案標題">
         <textarea id="desc" placeholder="專案描述"></textarea>
@@ -74,17 +147,17 @@
         <button onclick="doLogout()">登出</button>
     </div>
 
-    <!-- 接案人 -->
     <div id="contractor" class="card hidden">
         <h2>接案人面板</h2>
         <p>使用者：<strong id="contractorName"></strong></p>
+
         <button onclick="loadOpenProjects()">瀏覽專案</button>
         <div id="openProjects"></div>
         <button onclick="loadMyProjects()">我的專案</button>
         <div id="contractorProjects"></div>
         <button onclick="doLogout()">登出</button>
     </div>
-
+  
     <!-- Issue 面板 -->
     <div id="issuePanel" class="card hidden">
         <h2>Issue / 結案待處理事項</h2>
@@ -92,10 +165,274 @@
         <div id="issueContent" style="margin-top: 10px;"></div>
     </div>
 
-    <script>
+    <!-- 評價彈窗 -->
+    <div id="reviewModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeReviewModal()">&times;</span>
+            <h3>📜 詳細評論紀錄</h3>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+
+<script>
         const API = 'http://127.0.0.1:8080';
         let user = null;
         let currentIssueProjectId = null; // 目前正在查看 Issue 的專案 ID
+        
+        // ==========================================
+        //  【評價機制功能區】
+        // ==========================================
+
+        // 1. 取得平均評價 (GET)
+        async function fetchAverageRating(userId) {
+            try {
+                const response = await fetch(API + '/projects/user/' + userId + '/average-rating');
+                const data = await response.json();
+                
+                if (data.total_ratings > 0) {
+                    const avgScore = data.average_score.toFixed(1); 
+                    const stars = '★'.repeat(Math.round(avgScore));
+                    
+                    return `
+                        平均分數: ${avgScore} / 5.0 ${stars} 
+                        <span class="clickable-text" onclick="openReviewModal(${userId})">
+                            (${data.total_ratings} 筆評價)
+                        </span>
+                    `;
+                }
+                return '目前尚無評價。';
+            } catch (e) {
+                return '無法載入評價數據。';
+            }
+        }
+
+        // 2. 取得詳細評論列表 (GET)
+        async function fetchUserReviews(userId) {
+            try {
+                const response = await fetch(API + `/projects/user/${userId}/reviews`);
+                if (response.ok) {
+                    return await response.json();
+                }
+                return [];
+            } catch (e) {
+                console.error("Error fetching reviews:", e);
+                return [];
+            }
+        }
+        
+        // 3. 檢查單筆評價 (GET)
+        async function getRating(projectId, raterId) {
+            try {
+                const response = await fetch(API + `/projects/${projectId}/rate?rater_id=${raterId}`);
+                if (response.ok) {
+                    return await response.json();
+                }
+                return null; 
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // 4. 開啟評論彈窗
+        async function openReviewModal(userId) {
+            const modal = document.getElementById('reviewModal');
+            const modalBody = document.getElementById('modalBody');
+            
+            modalBody.innerHTML = '<p style="text-align:center; color:#666;">載入中...</p>';
+            modal.classList.add('show'); 
+
+            const reviews = await fetchUserReviews(userId);
+
+            if (reviews.length > 0) {
+                let html = '<div class="review-list">';
+                
+                reviews.forEach(r => {
+                    const commentText = r.comment ? r.comment : '<span style="color:#aaa;">(無文字評論)</span>';
+                    
+                    // --- 計算這筆評論的平均分 ---
+                    const scores = [
+                        r.cooperation_attitude,
+                        r.output_quality,
+                        r.execution_efficiency,
+                        r.demand_reasonableness,
+                        r.acceptance_difficulty
+                    ];
+                    // 過濾掉 null 的分數
+                    const validScores = scores.filter(s => s !== null && s !== undefined);
+                    
+                    let finalScore = 0;
+                    if (validScores.length > 0) {
+                        const sum = validScores.reduce((a, b) => a + b, 0);
+                        finalScore = (sum / validScores.length).toFixed(1);
+                    }
+                    // ---------------------------
+
+                    html += `
+                        <div class="review-item">
+                            <div class="review-meta" style="display:flex; justify-content:space-between;">
+                                <span>來自 ID: ${r.rater_id}</span>
+                                <span style="color:#f39c12; font-weight:bold;">★ ${finalScore}</span>
+                            </div>
+                            <div style="margin-top:5px; color:#333;">${commentText}</div>
+                        </div>`;
+                });
+                html += '</div>';
+                modalBody.innerHTML = html;
+            } else {
+                modalBody.innerHTML = '<p style="text-align:center; color:#888;">此使用者目前沒有詳細文字評論。</p>';
+            }
+        }
+
+        // 5. 關閉評論彈窗
+        function closeReviewModal() {
+            document.getElementById('reviewModal').classList.remove('show');
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('reviewModal');
+            if (event.target == modal) {
+                closeReviewModal();
+            }
+        }
+
+        // 6. 顯示評價表單
+        function showRatingForm(projectId, ratedUserId, roleToRate, existingRating = null) {
+            const targetDiv = document.getElementById(`rating-form-${projectId}`);
+            const currentRaterId = user.id;
+            
+            const isUpdate = existingRating !== null;
+            const actionText = isUpdate ? '修改' : '提交';
+            const buttonColor = isUpdate ? '#1e88e5' : '#38c172';
+            
+            const defaults = {
+                cooperation: existingRating?.cooperation_attitude || 5.0,
+                quality: existingRating?.output_quality || 4.5,
+                efficiency: existingRating?.execution_efficiency || 4.0,
+                reasonableness: existingRating?.demand_reasonableness || 4.0,
+                difficulty: existingRating?.acceptance_difficulty || 3.5,
+                comment: existingRating?.comment || '請輸入評論...'
+            };
+
+            targetDiv.innerHTML = `
+                <div style="padding: 15px; background: ${isUpdate ? '#e3f2fd' : '#fff8e1'}; border: 1px dashed ${isUpdate ? '#2196f3' : '#ffc107'}; margin-top: 10px;">
+                    <h4>對 ${roleToRate} (ID: ${ratedUserId}) ${actionText}評價</h4>
+                    <form id="rate-form-${projectId}">
+                        <input type="hidden" name="rater_id" value="${currentRaterId}">
+                        <input type="hidden" name="rated_user_id" value="${ratedUserId}">
+                        
+                        <label>合作態度 (1-5):</label>
+                        <input type="number" name="cooperation_attitude" value="${defaults.cooperation}" min="1.0" max="5.0" step="0.5" required><br>
+                        
+                        ${roleToRate === '接案人' ? `
+                            <label>產出品質 (1-5):</label>
+                            <input type="number" name="output_quality" value="${defaults.quality}" min="1.0" max="5.0" step="0.5"><br>
+                            <label>執行效率 (1-5):</label>
+                            <input type="number" name="execution_efficiency" value="${defaults.efficiency}" min="1.0" max="5.0" step="0.5"><br>
+                        ` : `
+                            <label>需求合理性 (1-5):</label>
+                            <input type="number" name="demand_reasonableness" value="${defaults.reasonableness}" min="1.0" max="5.0" step="0.5"><br>
+                            <label>驗收難度 (1-5):</label>
+                            <input type="number" name="acceptance_difficulty" value="${defaults.difficulty}" min="1.0" max="5.0" step="0.5"><br>
+                        `}
+                        
+                        <label>評論:</label>
+                        <textarea name="comment" rows="2">${defaults.comment}</textarea>
+                        
+                        <button type="submit" style="background: ${buttonColor};">確認${actionText}評價</button>
+                        <p id="message-${projectId}" style="margin-top: 5px;"></p>
+                    </form>
+                </div>
+            `;
+
+            document.getElementById(`rate-form-${projectId}`).addEventListener('submit', function(e) {
+                e.preventDefault();
+                submitRating(projectId, isUpdate);
+            });
+        }
+
+        // 7. 提交評價邏輯
+        async function submitRating(projectId, isUpdate = false) {
+            const form = document.getElementById(`rate-form-${projectId}`);
+            const messageDiv = document.getElementById(`message-${projectId}`);
+            const formData = new FormData(form);
+            const data = {};
+
+            for (const [key, value] of formData.entries()) {
+                if (key !== 'comment' && value !== '') {
+                    data[key] = isNaN(parseFloat(value)) ? value : parseFloat(value);
+                } else if (key === 'comment') {
+                    data[key] = value;
+                }
+            }
+            Object.keys(data).forEach(key => (data[key] === '' || data[key] == null) && delete data[key]);
+
+            messageDiv.textContent = isUpdate ? '修改中...' : '提交中...';
+            messageDiv.style.color = 'blue';
+
+            const method = isUpdate ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(API + `/projects/${projectId}/rate`, {
+                    method: method,
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    
+                    if (!isUpdate) {
+                        const ratedUserId = data.rated_user_id;
+                        const roleToRate = document.querySelector(`#rating-form-${projectId} h4`).innerText.includes('接案人') ? '接案人' : '委託人';
+                        
+                        await showRatingForm(projectId, ratedUserId, roleToRate, result);
+                        
+                        document.getElementById(`message-${projectId}`).textContent = `評價提交成功！表單已切換為修改模式。`;
+                        document.getElementById(`message-${projectId}`).style.color = 'green';
+                    } else {
+                        messageDiv.textContent = `評價修改成功！`;
+                        messageDiv.style.color = 'green';
+                    }
+
+                    loadMyProjects(); 
+                    displayAverageRatingArea(user.id); 
+                } else {
+                    const err = await response.json();
+                    if (response.status === 409 && !isUpdate) {
+                        messageDiv.textContent = '提交失敗：您已評價過，請點擊「修改評價」按鈕。';
+                        messageDiv.style.color = 'orange';
+                    } else {
+                        throw new Error(err.detail || '操作失敗');
+                    }
+                }
+            } catch (error) {
+                messageDiv.textContent = `錯誤: ${error.message}`;
+                messageDiv.style.color = 'red';
+            }
+        }
+
+        // 8. 顯示使用者平均評價
+        async function displayAverageRatingArea(userId) {
+             const avgRatingText = await fetchAverageRating(userId);
+             const targetDiv = document.getElementById(user.role === 'client' ? 'client' : 'contractor');
+             
+             let oldDiv = document.getElementById('user-avg-rating');
+             if (oldDiv) oldDiv.remove();
+
+             const avgDiv = document.createElement('div');
+             avgDiv.id = 'user-avg-rating';
+             avgDiv.className = 'card';
+             avgDiv.style.backgroundColor = '#e6e6fa';
+             
+             avgDiv.innerHTML = `<h3>⭐ 我的平均評價</h3><p>${avgRatingText}</p>`;
+             
+             targetDiv.insertBefore(avgDiv, targetDiv.querySelector('h2').nextSibling);
+        }
+
+        // ==========================================
+        //  【原有功能區】
+        // ==========================================
 
         function doRegister() {
             const data = {
@@ -140,6 +477,9 @@
                     document.getElementById('contractor').classList.remove('hidden');
                     document.getElementById('contractorName').textContent = user.username;
                 }
+                
+                loadMyProjects();
+                displayAverageRatingArea(user.id);
             })
             .catch(e => alert('登入失敗'));
         }
@@ -150,6 +490,7 @@
             document.getElementById('client').classList.add('hidden');
             document.getElementById('contractor').classList.add('hidden');
             closeIssuePanel();
+            window.location.reload(); 
         }
 
         function createProject() {
@@ -175,20 +516,40 @@
             fetch(API + '/projects/user/' + user.id)
             .then(r => r.json())
             .then(projects => {
-                const html = projects.map(p => 
-                    `<div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:3px solid #667eea;">
-                        <strong>${p.title}</strong><br>
+                const projectPromises = projects.map(async p => {
+                     let clientRatingText = '';
+                     let contractorRatingText = '';
+                     
+                     if (p.status === 'completed' && p.contractor_id) {
+                        clientRatingText = await fetchAverageRating(p.client_id);
+                        contractorRatingText = await fetchAverageRating(p.contractor_id);
+                     }
+
+                    const actionsHtml = await getActions(p);
+
+                    return `<div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:3px solid #667eea;">
+                        <strong>ID: ${p.id} - ${p.title}</strong><br>
                         ${p.description}<br>
-                        預算: ${p.budget} | 狀態: ${p.status}
-                        ${getActions(p)}
-                    </div>`
-                ).join('');
-                
-                if (user.role === 'client') {
-                    document.getElementById('clientProjects').innerHTML = html;
-                } else {
-                    document.getElementById('contractorProjects').innerHTML = html;
-                }
+                        預算: ${p.budget} | 狀態: <strong>${p.status}</strong><br>
+                        
+                        ${p.status === 'completed' && p.contractor_id ? 
+                            `<div style="margin-top: 5px; color: #555;">
+                                <div>委託人平均: ${clientRatingText}</div>
+                                <div>接案人平均: ${contractorRatingText}</div>
+                             </div>` : ''}
+                             
+                        ${actionsHtml}
+                    </div>`;
+                });
+
+                Promise.all(projectPromises).then(htmlArray => {
+                    const html = htmlArray.join('');
+                    if (user.role === 'client') {
+                        document.getElementById('clientProjects').innerHTML = html;
+                    } else {
+                        document.getElementById('contractorProjects').innerHTML = html;
+                    }
+                });
             });
         }
 
@@ -196,15 +557,26 @@
             fetch(API + '/projects/')
             .then(r => r.json())
             .then(projects => {
-                const html = projects.map(p => 
-                    `<div style="background:#f9f9f9; padding:10px; margin:10px 0;">
+                const projectPromises = projects.map(async p => {
+                    
+                    const clientRatingHtml = await fetchAverageRating(p.client_id);
+
+                    return `<div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:5px solid #e67e22;">
                         <strong>${p.title}</strong><br>
+                        
+                        <div style="margin: 5px 0; font-size: 0.9em; background: #fff3e0; padding: 5px; border-radius: 4px;">
+                            委託人信用: ${clientRatingHtml}
+                        </div>
+
                         ${p.description}<br>
                         預算: ${p.budget}
                         <button onclick="makeProposal(${p.id})">提出報價</button>
-                    </div>`
-                ).join('');
-                document.getElementById('openProjects').innerHTML = html;
+                    </div>`;
+                });
+
+                Promise.all(projectPromises).then(htmlArray => {
+                    document.getElementById('openProjects').innerHTML = htmlArray.join('');
+                });
             });
         }
 
@@ -224,16 +596,43 @@
         function selectContractor(pid) {
             fetch(API + '/projects/' + pid + '/proposals')
             .then(r => r.json())
-            .then(proposals => {
-                const list = proposals.map((p, i) => `${i+1}. ID:${p.contractor_id} - $${p.price}`).join('\n');
-                const choice = prompt('選擇接案人：\n' + list);
+            .then(async proposals => { 
+                
+                if (proposals.length === 0) {
+                    alert("目前還沒有人提案喔！");
+                    return;
+                }
+
+                const listPromises = proposals.map(async (p, i) => {
+                    let scoreText = "無評價";
+                    try {
+                        const res = await fetch(API + '/projects/user/' + p.contractor_id + '/average-rating');
+                        const data = await res.json();
+                        if (data.total_ratings > 0) {
+                            scoreText = `${data.average_score}★ (${data.total_ratings}評)`;
+                        }
+                    } catch (e) {
+                        scoreText = "讀取失敗";
+                    }
+                    
+                    return `${i+1}. ID:${p.contractor_id} [評分: ${scoreText}] - $${p.price}\n   說明: ${p.description}`;
+                });
+
+                const listItems = await Promise.all(listPromises);
+                const listStr = listItems.join('\n\n');
+
+                const choice = prompt('請輸入編號選擇接案人：\n\n' + listStr);
+                
                 if (choice) {
-                    const selected = proposals[parseInt(choice)-1];
-                    fetch(API + '/projects/' + pid + '/select-contractor?contractor_id=' + selected.contractor_id, {method: 'POST'})
-                    .then(() => {
-                        alert('已選擇接案人！');
-                        loadMyProjects();
-                    });
+                    const index = parseInt(choice) - 1;
+                    if (index >= 0 && index < proposals.length) {
+                        const selected = proposals[index];
+                        fetch(API + '/projects/' + pid + '/select-contractor?contractor_id=' + selected.contractor_id, {method: 'POST'})
+                        .then(() => {
+                            alert('已選擇接案人！');
+                            loadMyProjects();
+                        });
+                    }
                 }
             });
         }
@@ -289,20 +688,16 @@
         }
 
         function editProject(pid) {
-            // 先取得專案資料
             fetch(API + '/projects/' + pid)
             .then(r => r.json())
             .then(project => {
                 const newTitle = prompt('修改標題：', project.title);
                 if (!newTitle) return;
-                
                 const newDesc = prompt('修改描述：', project.description);
                 if (!newDesc) return;
-                
                 const newBudget = prompt('修改預算：', project.budget);
                 if (!newBudget) return;
                 
-                // 送出更新
                 fetch(API + '/projects/' + pid, {
                     method: 'PUT',
                     headers: {'Content-Type': 'application/json'},
@@ -461,34 +856,64 @@
             .catch(e => alert('操作失敗：' + (e.detail || JSON.stringify(e))));
         }
 
-        // ========== 根據角色與專案狀態顯示按鈕 ==========
+        // ========== 根據角色與專案狀態顯示按鈕 (合併修復版) ==========
 
-        function getActions(p) {
+        async function getActions(p) { 
+            let buttons = '';
+            
+            // 1. 如果專案已完成，顯示評價按鈕
+            if (p.status === 'completed' && p.contractor_id) {
+                const ratedDivId = `rating-form-${p.id}`;
+                let ratedUserId, roleToRate;
+                
+                if (user.role === 'client' && user.id === p.client_id) {
+                     ratedUserId = p.contractor_id;
+                     roleToRate = '接案人';
+                } else if (user.role === 'contractor' && user.id === p.contractor_id) {
+                     ratedUserId = p.client_id;
+                     roleToRate = '委託人';
+                }
+
+                if (ratedUserId) {
+                    const existingRating = await getRating(p.id, user.id);
+                    
+                    if (existingRating) {
+                        const ratingJson = JSON.stringify(existingRating).replace(/"/g, '&quot;');
+                        buttons += `<button style="background: #1e88e5;" onclick="showRatingForm(${p.id}, ${ratedUserId}, '${roleToRate}', ${ratingJson})">修改評價 ${roleToRate}</button>`;
+                    } else {
+                        buttons += `<button onclick="showRatingForm(${p.id}, ${ratedUserId}, '${roleToRate}')">評價 ${roleToRate}</button>`;
+                    }
+                    buttons += `<div id="${ratedDivId}"></div>`;
+                }
+            }
+            
+            // 2. 根據角色顯示操作按鈕
             if (user.role === 'client') {
                 if (p.status === 'open') {
-                    return `<br>
+                    buttons += `<br>
                         <button onclick="editProject(${p.id})">修改專案</button>
                         <button onclick="selectContractor(${p.id})">選擇接案人</button>`;
                 } else if (p.status === 'submitted') {
-                    return `<br>
+                    // 這裡合併了 Issue 功能和 接受/退件 功能
+                    buttons += `<br>
                         <button onclick="viewIssues(${p.id})">查看 / 管理 Issue</button>
                         <button onclick="createIssue(${p.id})">新增 Issue</button>
-                        <button onclick="acceptWork(${p.id})">接受</button>
-                        <button onclick="rejectWork(${p.id})">退件</button>`;
+                        <button onclick="acceptWork(${p.id})" style="background:#4caf50;">接受</button> 
+                        <button onclick="rejectWork(${p.id})" style="background:#f44336;">退件</button>`;
                 }
             } else {
-                // 接案人的操作
+                // Contractor
                 if (p.contractor_id === user.id) {
                     if (p.status === 'in_progress') {
-                        return `<br><button onclick="submitWork(${p.id})">上傳結案</button>`;
+                        buttons += `<br><button onclick="submitWork(${p.id})">上傳結案</button>`;
                     } else if (p.status === 'rejected') {
-                        return `<br><button onclick="submitWork(${p.id})" style="background:#ff9800;">重新提交結案</button>`;
+                        buttons += `<br><button onclick="submitWork(${p.id})" style="background:#ff9800;">重新提交結案</button>`;
                     } else if (p.status === 'submitted') {
-                        return `<br><button onclick="viewIssues(${p.id})">查看 Issue / 討論</button>`;
+                        buttons += `<br><button onclick="viewIssues(${p.id})">查看 Issue / 討論</button>`;
                     }
                 }
             }
-            return '';
+            return buttons;
         }
     </script>
 </body>

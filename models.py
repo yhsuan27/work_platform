@@ -39,6 +39,10 @@ class User(Base):
     proposals = relationship("Proposal", back_populates="contractor")
     messages = relationship("Message", back_populates="sender")
 
+    # 評價關聯設定
+    given_ratings = relationship("Rating", foreign_keys="Rating.rater_id", back_populates="rater")
+    received_ratings = relationship("Rating", foreign_keys="Rating.rated_user_id", back_populates="rated_user")
+
 # 專案資料表
 class Project(Base):
     __tablename__ = "projects"
@@ -62,6 +66,8 @@ class Project(Base):
     proposals = relationship("Proposal", back_populates="project")
     messages = relationship("Message", back_populates="project")
     issues = relationship("Issue", back_populates="project", cascade="all, delete-orphan") #新增
+
+    ratings = relationship("Rating", back_populates="project")
 
 # 提案資料表（接案人的報價）
 class Proposal(Base):
@@ -120,3 +126,41 @@ class Message(Base):
     # 關聯設定
     project = relationship("Project", back_populates="messages")
     sender = relationship("User", back_populates="messages")
+
+    # work_platform/work_platform/models.py (新增在檔案末尾)
+
+# work_platform/work_platform/models.py (新增在檔案末尾)
+
+# 評價資料表
+class Rating(Base):
+    __tablename__ = "ratings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # 評價者ID (誰給出的評價)
+    rater_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # 被評價的專案ID (針對哪個專案)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    # 被評價者ID (誰收到的評價)
+    rated_user_id = Column(Integer, ForeignKey("users.id"), nullable=False) 
+    
+    # 評價維度 (1-5 星，使用 Float 儲存 1.0-5.0 分)
+    cooperation_attitude = Column(Float, nullable=False) # 合作態度
+    
+    # 委託人受評維度 (Rater is Contractor, Rated is Client)
+    demand_reasonableness = Column(Float, nullable=True) # 需求合理性
+    acceptance_difficulty = Column(Float, nullable=True) # 驗收難度
+    
+    # 接案人受評維度 (Rater is Client, Rated is Contractor)
+    output_quality = Column(Float, nullable=True)       # 產出品質
+    execution_efficiency = Column(Float, nullable=True) # 執行效率
+    
+    # 總體質性評論
+    comment = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # 關聯設定
+    rater = relationship("User", foreign_keys=[rater_id], back_populates="given_ratings")
+    rated_user = relationship("User", foreign_keys=[rated_user_id], back_populates="received_ratings")
+    project = relationship("Project", back_populates="ratings")

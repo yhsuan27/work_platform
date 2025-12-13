@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from datetime import datetime
 import models, schemas
 from auth_utils import get_password_hash, verify_password
@@ -40,7 +40,7 @@ def create_project(db: Session, project: schemas.ProjectCreate, client_id: int):
         description=project.description,
         budget=project.budget,
         client_id=client_id,
-        status=models.ProjectStatus.OPEN  # 確保是 OPEN 不是 DRAFT
+        status=models.ProjectStatus.OPEN
     )
     db.add(db_project)
     db.commit()
@@ -58,7 +58,7 @@ def get_projects(db: Session, skip: int = 0, limit: int = 100):
     ).offset(skip).limit(limit).all()
 
 def get_user_projects(db: Session, user_id: int):
-    """取得使用者的專案（委託的或接的）"""
+    """取得使用者的專案"""
     return db.query(models.Project).filter(
         or_(models.Project.client_id == user_id, 
             models.Project.contractor_id == user_id)
@@ -247,3 +247,93 @@ def has_open_issues(db: Session, project_id: int) -> bool:
         .count()
         > 0
     )
+
+# ==================== Rating CRUD ====================
+
+def create_rating(db: Session, project_id: int, rater_id: int, rated_user_id: int, rating: schemas.RatingCreate):
+    """建立評價"""
+    rating_data = rating.dict(exclude_unset=True)
+    # 移除重複的 ID 參數
+    rating_data.pop('rater_id', None)
+    rating_data.pop('rated_user_id', None)
+    
+    db_rating = models.Rating(
+        rater_id=rater_id,
+        project_id=project_id,
+        rated_user_id=rated_user_id,
+        **rating_data 
+    )
+    db.add(db_rating)
+    db.commit()
+    db.refresh(db_rating)
+    return db_rating
+
+def get_average_rating(db: Session, user_id: int):
+    """取得使用者收到的綜合平均評價"""
+    ratings = db.query(models.Rating).filter(models.Rating.rated_user_id == user_id).all()
+    
+    if not ratings:
+        return {"average_score": 0.0, "total_ratings": 0}
+
+    total_score_sum = 0.0
+    total_items_count = 0
+
+    for r in ratings:
+        scores = [
+            r.cooperation_attitude,
+            r.output_quality,
+            r.execution_efficiency,
+            r.demand_reasonableness,
+            r.acceptance_difficulty
+        ]
+        valid_scores = [s for s in scores if s is not None]
+        
+        if valid_scores:
+            total_score_sum += sum(valid_scores) / len(valid_scores)
+            total_items_count += 1
+
+    final_average = total_score_sum / total_items_count if total_items_count > 0 else 0.0
+
+    return {
+        "average_score": round(final_average, 1),
+        "total_ratings": len(ratings)
+    }
+
+def has_user_rated_project(db: Session, project_id: int, rater_id: int, rated_user_id: int):
+    """檢查評價者是否已經對該專案的該使用者評分"""
+    return db.query(models.Rating).filter(
+        models.Rating.project_id == project_id,
+        models.Rating.rater_id == rater_id,
+        models.Rating.rated_user_id == rated_user_id
+    ).first()
+
+# --- 新增的查詢與更新功能 ---
+
+def get_rating_by_ids(db: Session, project_id: int, rater_id: int):
+    """根據專案ID和評價者ID取得評價"""
+    return db.query(models.Rating).filter(
+        models.Rating.project_id == project_id,
+        models.Rating.rater_id == rater_id
+    ).first()
+
+def update_rating(db: Session, project_id: int, rater_id: int, rating_update: schemas.RatingCreate):
+    """更新已存在的評價"""
+    db_rating = get_rating_by_ids(db, project_id, rater_id)
+    if db_rating:
+        update_data = rating_update.dict(exclude_unset=True)
+        update_data.pop('rater_id', None)
+        update_data.pop('rated_user_id', None)
+        
+        for key, value in update_data.items():
+            setattr(db_rating, key, value)
+            
+        db.commit()
+        db.refresh(db_rating)
+    return db_rating
+
+# 新增：取得文字評論列表
+def get_user_reviews(db: Session, user_id: int):
+    """取得特定使用者收到的所有評價列表 (包含評論內容)"""
+    return db.query(models.Rating).filter(
+        models.Rating.rated_user_id == user_id
+    ).order_by(models.Rating.created_at.desc()).all()

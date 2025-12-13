@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr,Field
 from typing import Optional, List
 from datetime import datetime
 from models import UserRole, ProjectStatus, IssueStatus #新增IssueStatus
@@ -151,3 +151,39 @@ class MessageWithSender(Message):
     
     class Config:
         from_attributes = True
+
+# work_platform/work_platform/schemas.py (新增在檔案末尾)
+
+# ==================== Rating Schemas ====================
+
+class RatingBase(BaseModel):
+    # 共同維度
+    cooperation_attitude: float = Field(..., ge=1.0, le=5.0) 
+    comment: Optional[str] = None
+    
+    # 委託人受評維度
+    demand_reasonableness: Optional[float] = Field(None, ge=1.0, le=5.0)
+    acceptance_difficulty: Optional[float] = Field(None, ge=1.0, le=5.0)
+    
+    # 接案人受評維度
+    output_quality: Optional[float] = Field(None, ge=1.0, le=5.0)
+    execution_efficiency: Optional[float] = Field(None, ge=1.0, le=5.0)
+
+class RatingCreate(RatingBase):
+    rater_id: int          # 評價者 ID (新增至 Body)
+    rated_user_id: int     # 被評價者 ID (新增至 Body)
+
+class Rating(RatingBase):
+    id: int
+    rater_id: int
+    project_id: int
+    rated_user_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class AvgRating(BaseModel):
+    """用於顯示平均評價的 Schema"""
+    average_score: float
+    total_ratings: int
