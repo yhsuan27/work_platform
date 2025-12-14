@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from datetime import datetime
-
 import models, schemas
 from auth_utils import get_password_hash, verify_password
 
@@ -47,7 +46,7 @@ def create_project(db: Session, project: schemas.ProjectCreate, client_id: int):
         budget=project.budget,
         client_id=client_id,
         status=models.ProjectStatus.OPEN,
-        deadline=project.deadline,   # 可能是 None
+        deadline=project.deadline
     )
     db.add(db_project)
     db.commit()
@@ -82,7 +81,7 @@ def get_projects(db: Session, skip: int = 0, limit: int = 100):
 
 
 def get_user_projects(db: Session, user_id: int):
-    """取得使用者的專案（委託的或接的）"""
+    """取得使用者的專案"""
     return db.query(models.Project).filter(
         or_(
             models.Project.client_id == user_id,
@@ -112,64 +111,18 @@ def select_contractor(db: Session, project_id: int, contractor_id: int):
         db.refresh(db_project)
     return db_project
 
+def submit_project(db: Session, project_id: int, file_url: str):
+    db_project = get_project(db, project_id)
+    if not db_project:
+        return None
 
-# ====== 結案版本控管（用網址） ======
+    db_project.status = models.ProjectStatus.SUBMITTED
+    db_project.updated_at = datetime.utcnow()
 
-def add_submission_file(db: Session, project_id: int, file_url: str):
-    """
-    新增一個結案檔案版本（用網址）
-    - 不覆蓋舊版本
-    - version 自動 +1
-    """
-    last = (
-        db.query(models.SubmissionFile)
-        .filter(models.SubmissionFile.project_id == project_id)
-        .order_by(models.SubmissionFile.version.desc())
-        .first()
-    )
-    next_ver = 1 if not last else last.version + 1
-
-    db_file = models.SubmissionFile(
-        project_id=project_id,
-        version=next_ver,
-        file_url=file_url,
-    )
-    db.add(db_file)
-
-    # Project 上保留「最新一筆」網址做顯示
-    project = get_project(db, project_id)
-    if project:
-        project.submission_file_url = file_url
-        project.status = models.ProjectStatus.SUBMITTED
-        project.updated_at = datetime.utcnow()
+    add_submission_version(db, project_id, file_url)
 
     db.commit()
-    db.refresh(db_file)
-    return db_file
-
-
-def get_submission_files(db: Session, project_id: int):
-    """取得某專案所有結案版本"""
-    return (
-        db.query(models.SubmissionFile)
-        .filter(models.SubmissionFile.project_id == project_id)
-        .order_by(models.SubmissionFile.version)
-        .all()
-    )
-
-
-def submit_project(db: Session, project_id: int, file_url: str):
-    """提交結案（會寫入最新結案網址 + 新增一筆版本紀錄）"""
-    db_project = get_project(db, project_id)
-    if db_project:
-        db_project.submission_file_url = file_url
-        db_project.status = models.ProjectStatus.SUBMITTED
-        db.commit()
-        db.refresh(db_project)
-
-        # ★ 新增一個版本紀錄
-        add_submission_version(db, project_id=project_id, submit_url=file_url)
-
+    db.refresh(db_project)
     return db_project
 
 
@@ -330,3 +283,184 @@ def get_submission_versions(db: Session, project_id: int):
         .order_by(models.SubmissionVersion.version.asc())
         .all()
     )
+
+# ==================== Issue CRUD ====================(新增)
+
+def create_issue(db: Session, project_id: int, creator_id: int, issue_in: schemas.IssueCreate):
+    """建立一筆 Issue（通常由委託方在專案已提交結案後建立）"""
+    project = get_project(db, project_id)
+    if not project:
+        return None
+
+    # 可以依需求限制只有 SUBMITTED 狀態才能建立 issue
+    if project.status != models.ProjectStatus.SUBMITTED:
+        return None
+
+    db_issue = models.Issue(
+        project_id=project_id,
+        title=issue_in.title,
+        description=issue_in.description,
+        created_by_id=creator_id,
+    )
+    db.add(db_issue)
+    db.commit()
+    db.refresh(db_issue)
+    return db_issue
+
+
+def get_project_issues(db: Session, project_id: int):
+    """取得某專案底下的所有 Issues"""
+    return (
+        db.query(models.Issue)
+        .filter(models.Issue.project_id == project_id)
+        .order_by(models.Issue.created_at)
+        .all()
+    )
+
+
+def create_issue_comment(db: Session, issue_id: int, sender_id: int, content: str):
+    """在 Issue 底下新增留言"""
+    issue = db.query(models.Issue).filter(models.Issue.id == issue_id).first()
+    if not issue:
+        return None
+
+    db_comment = models.IssueComment(
+        issue_id=issue_id,
+        sender_id=sender_id,
+        content=content,
+    )
+    db.add(db_comment)
+    db.commit()
+    db.refresh(db_comment)
+    return db_comment
+
+
+def get_issue_comments(db: Session, issue_id: int):
+    """取得 Issue 底下所有留言"""
+    return (
+        db.query(models.IssueComment)
+        .filter(models.IssueComment.issue_id == issue_id)
+        .order_by(models.IssueComment.created_at)
+        .all()
+    )
+
+
+def resolve_issue(db: Session, issue_id: int, resolver_id: int):
+    """由委託方將 Issue 設為已處理完成"""
+    issue = db.query(models.Issue).filter(models.Issue.id == issue_id).first()
+    if not issue:
+        return None
+
+    project = issue.project
+    if project.client_id != resolver_id:
+        # 只有該專案的委託人可以結束 Issue
+        return None
+
+    issue.status = models.IssueStatus.RESOLVED
+    issue.resolved_at = datetime.utcnow()
+    db.commit()
+    db.refresh(issue)
+    return issue
+
+
+def has_open_issues(db: Session, project_id: int) -> bool:
+    """檢查某專案是否仍有未處理的 Issue"""
+    return (
+        db.query(models.Issue)
+        .filter(
+            models.Issue.project_id == project_id,
+            models.Issue.status == models.IssueStatus.OPEN,
+        )
+        .count()
+        > 0
+    )
+
+# ==================== Rating CRUD ====================
+
+def create_rating(db: Session, project_id: int, rater_id: int, rated_user_id: int, rating: schemas.RatingCreate):
+    """建立評價"""
+    rating_data = rating.dict(exclude_unset=True)
+    # 移除重複的 ID 參數
+    rating_data.pop('rater_id', None)
+    rating_data.pop('rated_user_id', None)
+    
+    db_rating = models.Rating(
+        rater_id=rater_id,
+        project_id=project_id,
+        rated_user_id=rated_user_id,
+        **rating_data 
+    )
+    db.add(db_rating)
+    db.commit()
+    db.refresh(db_rating)
+    return db_rating
+
+def get_average_rating(db: Session, user_id: int):
+    """取得使用者收到的綜合平均評價"""
+    ratings = db.query(models.Rating).filter(models.Rating.rated_user_id == user_id).all()
+    
+    if not ratings:
+        return {"average_score": 0.0, "total_ratings": 0}
+
+    total_score_sum = 0.0
+    total_items_count = 0
+
+    for r in ratings:
+        scores = [
+            r.cooperation_attitude,
+            r.output_quality,
+            r.execution_efficiency,
+            r.demand_reasonableness,
+            r.acceptance_difficulty
+        ]
+        valid_scores = [s for s in scores if s is not None]
+        
+        if valid_scores:
+            total_score_sum += sum(valid_scores) / len(valid_scores)
+            total_items_count += 1
+
+    final_average = total_score_sum / total_items_count if total_items_count > 0 else 0.0
+
+    return {
+        "average_score": round(final_average, 1),
+        "total_ratings": len(ratings)
+    }
+
+def has_user_rated_project(db: Session, project_id: int, rater_id: int, rated_user_id: int):
+    """檢查評價者是否已經對該專案的該使用者評分"""
+    return db.query(models.Rating).filter(
+        models.Rating.project_id == project_id,
+        models.Rating.rater_id == rater_id,
+        models.Rating.rated_user_id == rated_user_id
+    ).first()
+
+# --- 新增的查詢與更新功能 ---
+
+def get_rating_by_ids(db: Session, project_id: int, rater_id: int):
+    """根據專案ID和評價者ID取得評價"""
+    return db.query(models.Rating).filter(
+        models.Rating.project_id == project_id,
+        models.Rating.rater_id == rater_id
+    ).first()
+
+def update_rating(db: Session, project_id: int, rater_id: int, rating_update: schemas.RatingCreate):
+    """更新已存在的評價"""
+    db_rating = get_rating_by_ids(db, project_id, rater_id)
+    if db_rating:
+        update_data = rating_update.dict(exclude_unset=True)
+        update_data.pop('rater_id', None)
+        update_data.pop('rated_user_id', None)
+        
+        for key, value in update_data.items():
+            setattr(db_rating, key, value)
+            
+        db.commit()
+        db.refresh(db_rating)
+    return db_rating
+
+# 新增：取得文字評論列表
+def get_user_reviews(db: Session, user_id: int):
+    """取得特定使用者收到的所有評價列表 (包含評論內容)"""
+    return db.query(models.Rating).filter(
+        models.Rating.rated_user_id == user_id
+    ).order_by(models.Rating.created_at.desc()).all()

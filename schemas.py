@@ -1,7 +1,7 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
-from models import UserRole, ProjectStatus
+from models import UserRole, ProjectStatus, IssueStatus 
 
 # ==================== User Schemas ====================
 
@@ -30,6 +30,39 @@ class Token(BaseModel):
     token_type: str
     user: User
 
+# ==================== Issue Schemas (需放在 Project 之前) ====================
+
+class IssueBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+
+class IssueCreate(IssueBase):
+    pass
+
+class Issue(IssueBase):
+    id: int
+    project_id: int
+    status: IssueStatus
+    created_by_id: int
+    created_at: datetime
+    resolved_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class IssueCommentCreate(BaseModel):
+    content: str
+
+class IssueComment(BaseModel):
+    id: int
+    issue_id: int
+    sender_id: int
+    content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # ==================== Project Schemas ====================
 
 class ProjectBase(BaseModel):
@@ -40,7 +73,6 @@ class ProjectBase(BaseModel):
     deadline: Optional[datetime] = None
 
 class ProjectCreate(ProjectBase):
-    # 之後前端在建立專案時要一併送出 deadline
     pass
 
 class ProjectUpdate(BaseModel):
@@ -48,7 +80,6 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
     budget: Optional[float] = None
     status: Optional[ProjectStatus] = None
-    # 也允許更新截止時間
     deadline: Optional[datetime] = None
 
 class ProjectSubmit(BaseModel):
@@ -74,7 +105,8 @@ class Project(ProjectBase):
 class ProjectWithDetails(Project):
     client: User
     contractor: Optional[User] = None
-    
+    issues: List[Issue] = []    # 這裡就可以正常使用 Issue 了
+
     class Config:
         from_attributes = True
 
@@ -91,8 +123,6 @@ class ProposalFile(BaseModel):
     class Config:
         from_attributes = True
 
-# 如果之後想回傳「直接可下載的網址」，可以再加一個包含 download_url 的 schema
-
 # ==================== Proposal Schemas ====================
 
 class ProposalBase(BaseModel):
@@ -101,8 +131,7 @@ class ProposalBase(BaseModel):
 
 class ProposalCreate(ProposalBase):
     project_id: int
-    # 提案時實際的 PDF 檔會用 UploadFile 接，不會用 schema，
-    # 所以這裡先不用放檔案欄位
+    # 提案時實際的 PDF 檔會用 UploadFile 接，不會用 schema
 
 class Proposal(ProposalBase):
     id: int
@@ -128,11 +157,10 @@ class SubmissionVersion(BaseModel):
     project_id: int
     version: int
     submit_url: str
-    uploaded_at: datetime
+    uploaded_at: datetime # 這裡對應 models 的 created_at
 
     class Config:
         from_attributes = True
-
 
 # ==================== Message Schemas ====================
 
@@ -154,3 +182,37 @@ class MessageWithSender(Message):
     
     class Config:
         from_attributes = True
+
+# ==================== Rating Schemas ====================
+
+class RatingBase(BaseModel):
+    # 共同維度
+    cooperation_attitude: float = Field(..., ge=1.0, le=5.0) 
+    comment: Optional[str] = None
+    
+    # 委託人受評維度
+    demand_reasonableness: Optional[float] = Field(None, ge=1.0, le=5.0)
+    acceptance_difficulty: Optional[float] = Field(None, ge=1.0, le=5.0)
+    
+    # 接案人受評維度
+    output_quality: Optional[float] = Field(None, ge=1.0, le=5.0)
+    execution_efficiency: Optional[float] = Field(None, ge=1.0, le=5.0)
+
+class RatingCreate(RatingBase):
+    rater_id: int           # 評價者 ID
+    rated_user_id: int      # 被評價者 ID
+
+class Rating(RatingBase):
+    id: int
+    rater_id: int
+    project_id: int
+    rated_user_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class AvgRating(BaseModel):
+    """用於顯示平均評價的 Schema"""
+    average_score: float
+    total_ratings: int

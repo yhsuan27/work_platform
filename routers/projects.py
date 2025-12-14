@@ -6,6 +6,7 @@ from fastapi import (
     UploadFile,
     File,
     Form,
+    status,
 )
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -31,7 +32,7 @@ SUBMISSION_UPLOAD_DIR = BASE_DIR / "static" / "submissions"
 SUBMISSION_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# ==================== 專案相關 ====================
+# ==================== 專案基本 CRUD ====================
 
 @router.post("/", response_model=schemas.Project)
 def create_project(
@@ -87,6 +88,8 @@ def get_user_projects(user_id: int, db: Session = Depends(get_db)):
     return crud.get_user_projects(db, user_id)
 
 
+# ==================== 專案流程 (選擇、提交、驗收) ====================
+
 @router.post("/{project_id}/select-contractor", response_model=schemas.Project)
 def select_contractor(
     project_id: int,
@@ -104,9 +107,15 @@ def select_contractor(
 @router.post("/{project_id}/submit", response_model=schemas.Project)
 async def submit_project(
     project_id: int,
-    file: UploadFile = File(...),
+    file: UploadFile = File(None), # 這裡為了相容性，先允許 None，但邏輯上要有檔案
+    submission_file_url: Optional[str] = Form(None), # 為了相容舊版純網址上傳
     db: Session = Depends(get_db),
 ):
+    """
+    提交結案檔案
+    - 支援舊版純網址 (submission_file_url)
+    - 支援新版檔案上傳 (file)
+    """
     project = crud.get_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="專案不存在")
@@ -121,25 +130,40 @@ async def submit_project(
             detail="目前狀態不可上傳結案"
         )
 
-    orig_name = file.filename or "file"
-    suffix = Path(orig_name).suffix
-    unique_name = f"{project_id}_{uuid4().hex}{suffix}"
-    save_path = SUBMISSION_UPLOAD_DIR / unique_name
+    final_url = ""
 
-    file_bytes = await file.read()
-    with open(save_path, "wb") as f:
-        f.write(file_bytes)
+    # 如果有上傳實體檔案
+    if file:
+        orig_name = file.filename or "file"
+        suffix = Path(orig_name).suffix
+        unique_name = f"{project_id}_{uuid4().hex}{suffix}"
+        save_path = SUBMISSION_UPLOAD_DIR / unique_name
 
-    submit_url = f"/static/submissions/{unique_name}"
+        file_bytes = await file.read()
+        with open(save_path, "wb") as f:
+            f.write(file_bytes)
+        
+        final_url = f"/static/submissions/{unique_name}"
+    
+    # 如果沒檔案但有網址（舊版相容）
+    elif submission_file_url:
+        final_url = submission_file_url
+    
+    else:
+         raise HTTPException(status_code=400, detail="請上傳檔案或提供連結")
 
-    project = crud.submit_project(db, project_id, submit_url)
+    # 寫入資料庫 (crud 裡面會處理版本控制)
+    project = crud.submit_project(db, project_id, final_url)
     return project
-
 
 
 @router.post("/{project_id}/accept", response_model=schemas.Project)
 def accept_project(project_id: int, db: Session = Depends(get_db)):
     """接受結案（委託人）"""
+    # 檢查是否有未解決的 Issue (來自 main 分支的邏輯)
+    if crud.has_open_issues(db, project_id):
+        raise HTTPException(status_code=400, detail="仍有未處理的 issue，無法結案")
+
     project = crud.accept_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="專案不存在")
@@ -159,21 +183,19 @@ def reject_project(
     return project
 
 
-@router.get("/{project_id}/submission-files")
-def get_submission_files(project_id: int, db: Session = Depends(get_db)):
+@router.get("/{project_id}/submissions")
+def get_project_submissions(project_id: int, db: Session = Depends(get_db)):
     """
-    舊需求：查看某專案所有結案版本（網址）
-    如果之後沒用到，可以不呼叫這支 API
+    取得某專案所有歷史結案版本
     """
-    files = crud.get_submission_files(db, project_id)
+    versions = crud.get_submission_versions(db, project_id)
     return [
         {
-            "id": f.id,
-            "version": f.version,
-            "file_url": f.file_url,
-            "uploaded_at": f.uploaded_at,
+            "version": v.version,
+            "submit_url": v.submit_url,
+            "created_at": v.created_at.isoformat() if v.created_at else None,
         }
-        for f in files
+        for v in versions
     ]
 
 
@@ -185,30 +207,24 @@ async def create_proposal(
     contractor_id: int,
     price: float = Form(...),
     description: Optional[str] = Form(None),
-    file: UploadFile = File(...),
+    file: UploadFile = File(None), # 允許不傳檔（相容舊版）
     db: Session = Depends(get_db),
 ):
     """
     提出承包意願（接案人）
-    1. 檢查專案是否還在截止時間內（限時競標）
-    2. 必須上傳 PDF 檔案
-    3. 檔名做處理，不覆蓋舊檔（用 uuid 產生唯一檔名）
-    4. 檔案版本寫入 ProposalFile
+    - 如果有上傳 file，則走 PDF 流程 (feature 分支)
+    - 如果沒上傳 file，則走簡易流程 (main 分支)
     """
     # 1️⃣ 確認專案存在
     project = crud.get_project(db, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="專案不存在")
 
-    # 2️⃣ 檢查是否仍可投標
+    # 2️⃣ 檢查是否仍可投標 (feature 分支邏輯)
     if not crud.is_project_open_for_bidding(project):
         raise HTTPException(status_code=400, detail="此專案已截止或不可投標")
 
-    # 3️⃣ 檢查檔案格式（只能 pdf）
-    if file.content_type != "application/pdf":
-        raise HTTPException(status_code=400, detail="僅接受 PDF 檔案")
-
-    # 4️⃣ 先建立 Proposal（不含檔案）
+    # 3️⃣ 建立基本 Proposal
     proposal_data = schemas.ProposalCreate(
         project_id=project_id,
         price=price,
@@ -216,30 +232,40 @@ async def create_proposal(
     )
     db_proposal = crud.create_proposal(db, proposal_data, contractor_id)
 
-    # 5️⃣ 產生不會重複的檔名
-    ext = ".pdf"
-    unique_name = f"{db_proposal.id}_{uuid4().hex}{ext}"
-    save_path = PROPOSAL_UPLOAD_DIR / unique_name
+    # 4️⃣ 如果有檔案，處理 PDF 上傳
+    if file:
+        if file.content_type != "application/pdf":
+            raise HTTPException(status_code=400, detail="僅接受 PDF 檔案")
 
-    # 6️⃣ 實際寫檔
-    file_bytes = await file.read()
-    with open(save_path, "wb") as f:
-        f.write(file_bytes)
+        # 產生檔名
+        ext = ".pdf"
+        unique_name = f"{db_proposal.id}_{uuid4().hex}{ext}"
+        save_path = PROPOSAL_UPLOAD_DIR / unique_name
 
-    # 7️⃣ 建立 ProposalFile 記錄
-    crud.add_proposal_file(
-        db=db,
-        proposal_id=db_proposal.id,
-        original_filename=file.filename,
-        stored_path=str(save_path.relative_to(BASE_DIR)),
-    )
+        # 寫檔
+        file_bytes = await file.read()
+        with open(save_path, "wb") as f:
+            f.write(file_bytes)
 
-    return JSONResponse(
-        {
-            "message": "提案已送出，PDF 已上傳",
-            "proposal_id": db_proposal.id,
-        }
-    )
+        # 寫入 ProposalFile 記錄
+        crud.add_proposal_file(
+            db=db,
+            proposal_id=db_proposal.id,
+            original_filename=file.filename,
+            stored_path=str(save_path.relative_to(BASE_DIR)),
+        )
+        
+        return JSONResponse(
+            {
+                "message": "提案已送出，PDF 已上傳",
+                "proposal_id": db_proposal.id,
+                "price": price,
+                "description": description
+            }
+        )
+
+    # 如果沒檔案，直接回傳 proposal 物件
+    return db_proposal
 
 
 @router.get("/{project_id}/proposals", response_model=List[schemas.Proposal])
@@ -269,22 +295,107 @@ def get_proposal_files(proposal_id: int, db: Session = Depends(get_db)):
     return result
 
 
-@router.get("/{project_id}/submissions")
-def get_project_submissions(project_id: int, db: Session = Depends(get_db)):
-    """
-    取得某專案所有歷史結案版本
-    回傳格式：
-    [
-      {"version": 1, "submit_url": "...", "created_at": "..."},
-      ...
-    ]
-    """
-    versions = crud.get_submission_versions(db, project_id)
-    return [
-        {
-            "version": v.version,
-            "submit_url": v.submit_url,
-            "created_at": v.created_at.isoformat() if v.created_at else None,
-        }
-        for v in versions
-    ]
+# ==================== Issue 相關 (來自 main 分支) ====================
+
+@router.post("/{project_id}/issues", response_model=schemas.Issue)
+def create_issue(
+    project_id: int,
+    issue: schemas.IssueCreate,
+    creator_id: int,              
+    db: Session = Depends(get_db)
+):
+    db_issue = crud.create_issue(db, project_id, creator_id, issue)
+    if not db_issue:
+        raise HTTPException(status_code=400, detail="無法建立 issue（專案不存在或狀態不允許）")
+    return db_issue
+
+# 列出專案的所有 Issue
+@router.get("/{project_id}/issues", response_model=List[schemas.Issue])
+def get_issues(project_id: int, db: Session = Depends(get_db)):
+    return crud.get_project_issues(db, project_id)
+
+# 甲乙雙方在 Issue 底下留言
+@router.post("/{project_id}/issues/{issue_id}/comments", response_model=schemas.IssueComment)
+def create_issue_comment(
+    project_id: int,
+    issue_id: int,
+    comment: schemas.IssueCommentCreate,
+    sender_id: int,
+    db: Session = Depends(get_db)
+):
+    db_comment = crud.create_issue_comment(db, issue_id, sender_id, comment.content)
+    if not db_comment:
+        raise HTTPException(status_code=404, detail="Issue 不存在")
+    return db_comment
+
+# 取得 Issue 底下所有留言
+@router.get("/{project_id}/issues/{issue_id}/comments", response_model=List[schemas.IssueComment])
+def get_issue_comments(project_id: int, issue_id: int, db: Session = Depends(get_db)):
+    return crud.get_issue_comments(db, issue_id)
+
+# 甲方將 Issue 設為已處理完成
+@router.post("/{project_id}/issues/{issue_id}/resolve", response_model=schemas.Issue)
+def resolve_issue(
+    project_id: int,
+    issue_id: int,
+    resolver_id: int,
+    db: Session = Depends(get_db)
+):
+    db_issue = crud.resolve_issue(db, issue_id, resolver_id)
+    if not db_issue:
+        raise HTTPException(status_code=400, detail="無法將 issue 設為已完成（權限或資料錯誤）")
+    return db_issue
+
+
+# ==================== 評價相關 (來自 main 分支) ====================
+
+@router.post("/{project_id}/rate", response_model=schemas.Rating)
+def rate_user(project_id: int, rating: schemas.RatingCreate, db: Session = Depends(get_db)):
+    """提交評價"""
+    rater_id = rating.rater_id
+    rated_user_id = rating.rated_user_id
+    
+    project = crud.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="專案不存在")
+
+    if project.status != models.ProjectStatus.COMPLETED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="專案未完成，無法評價")
+        
+    if rater_id not in [project.client_id, project.contractor_id]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="非專案參與者無法評價")
+
+    if (rated_user_id not in [project.client_id, project.contractor_id] or rated_user_id == rater_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="評價對象必須是專案的另一方")
+        
+    if crud.has_user_rated_project(db, project_id, rater_id, rated_user_id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="您已對該使用者完成評價")
+
+    return crud.create_rating(db, project_id, rater_id, rated_user_id, rating)
+
+@router.get("/{project_id}/rate", response_model=schemas.Rating)
+def get_rating(project_id: int, rater_id: int, db: Session = Depends(get_db)):
+    """查詢單一評價 (用於前端判斷)"""
+    rating = crud.get_rating_by_ids(db, project_id, rater_id)
+    if not rating:
+        raise HTTPException(status_code=404, detail="尚未評價")
+    return rating
+
+@router.put("/{project_id}/rate", response_model=schemas.Rating)
+def update_existing_rating(project_id: int, rating_update: schemas.RatingCreate, db: Session = Depends(get_db)):
+    """修改評價"""
+    rater_id = rating_update.rater_id
+    db_rating = crud.get_rating_by_ids(db, project_id, rater_id)
+    if not db_rating:
+        raise HTTPException(status_code=404, detail="找不到要修改的評價")
+    return crud.update_rating(db, project_id, rater_id, rating_update)
+
+@router.get("/user/{user_id}/average-rating", response_model=schemas.AvgRating)
+def get_user_average_rating(user_id: int, db: Session = Depends(get_db)):
+    """取得平均評價"""
+    return crud.get_average_rating(db, user_id)
+
+@router.get("/user/{user_id}/reviews", response_model=List[schemas.Rating])
+def get_user_reviews(user_id: int, db: Session = Depends(get_db)):
+    """取得詳細評論列表"""
+    return crud.get_user_reviews(db, user_id)
