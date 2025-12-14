@@ -2,209 +2,422 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>工作委託平台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WorkFlow | 專業工作委託平台</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 50px auto;
-            padding: 20px;
-            background: #f0f0f0;
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --secondary: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-sub: #6b7280;
+            --border-radius: 12px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
-        .card {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px 20px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--text-main);
+            font-weight: 800;
+            margin-bottom: 40px;
+            font-size: 2.2rem;
+            letter-spacing: -0.025em;
+        }
+        
+        h1 i { color: var(--primary); margin-right: 10px; }
+
+        h2 {
+            font-size: 1.25rem;
+            color: var(--text-main);
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+            margin-top: 0;
             margin-bottom: 20px;
         }
-        h1 { color: #333; text-align: center; }
-        h2 { color: #666; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 30px;
+            margin-bottom: 24px;
+            transition: transform 0.2s;
+        }
+
+        /* 輸入框樣式 */
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
         input, select, textarea {
             width: 100%;
-            padding: 10px;
-            margin: 5px 0 15px 0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            padding: 12px;
+            margin-bottom: 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
             font-size: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            font-family: inherit;
         }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        /* 按鈕樣式系統 */
         button {
             width: 100%;
             padding: 12px;
-            background: #667eea;
-            color: white;
             border: none;
-            border-radius: 5px;
-            font-size: 16px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
             cursor: pointer;
-            margin-top: 10px;
-        }
-        button:hover { background: #5568d3; }
-        .hidden { display: none; }
-
-        /* Feature 分支樣式 */
-        .sub-btn {
-            width: auto;
-            padding: 6px 10px;
-            margin-top: 5px;
-            font-size: 13px;
-            margin-right: 5px;
-        }
-        .version-list {
-            margin-top: 6px;
-            font-size: 13px;
-            padding-left: 4px;
-            border-left: 2px solid #ccc;
-        }
-        .version-list a {
-            text-decoration: underline;
-            color: #007bff;
-        }
-
-        /* Main 分支樣式 (評論) */
-        .review-box {
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px dashed #ccc;
-        }
-        .review-list {
-            max-height: 200px;
-            overflow-y: auto;
-            margin-top: 15px; 
-        }
-        .review-item {
-            background: #fff;
-            border-left: 4px solid #667eea;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            border-radius: 4px;
-            font-size: 0.9em;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        .review-meta {
-            font-size: 0.85em;
-            color: #888;
-            margin-bottom: 4px;
-        }
-
-        /* --- 彈出視窗 (Modal) 樣式 --- */
-        .modal {
-            position: fixed; 
-            z-index: 1000; 
-            left: 0;
-            top: 0;
-            width: 100%; 
-            height: 100%; 
-            overflow: auto; 
-            background-color: rgba(0,0,0,0.5);
-            display: none;
+            transition: all 0.2s;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
+            gap: 8px;
         }
-        .modal.show { display: flex; }
-        .modal-content {
-            background-color: #fefefe;
-            padding: 20px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            position: relative;
-        }
-        .close-btn {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-            position: absolute;
-            right: 15px;
-            top: 10px;
-        }
-        .close-btn:hover { color: #000; }
 
-        /* --- 可點擊文字樣式 --- */
-        .clickable-text {
-            color: #007bff;
-            text-decoration: underline;
-            cursor: pointer;
-            font-weight: normal;
-            margin-left: 5px;
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+
+        .btn-secondary { background: white; border: 1px solid #d1d5db; color: var(--text-main); }
+        .btn-secondary:hover { background: #f9fafb; border-color: #9ca3af; }
+
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { background: #059669; }
+
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #dc2626; }
+
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-warning:hover { background: #d97706; }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+            width: auto;
+            margin-right: 8px;
+            margin-bottom: 8px;
         }
-        .clickable-text:hover { color: #0056b3; }
+
+        .hidden { display: none; }
+
+        /* 專案列表樣式 */
+        .project-item {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .project-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            background: var(--primary);
+        }
+
+        .project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .project-title { font-size: 1.1rem; font-weight: 700; color: var(--text-main); }
+        
+        .badge {
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .badge-status { background: #e0e7ff; color: var(--primary); }
+        .badge-budget { background: #dcfce7; color: #059669; }
+        .badge-deadline { background: #fee2e2; color: #ef4444; }
+
+        .project-meta {
+            font-size: 0.9rem;
+            color: var(--text-sub);
+            margin-bottom: 15px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .project-desc {
+            background: #f9fafb;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            color: #4b5563;
+            margin-bottom: 15px;
+        }
+
+        .action-bar {
+            border-top: 1px solid #f3f4f6;
+            padding-top: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        /* 版本列表 */
+        .version-list {
+            margin-top: 10px;
+            font-size: 0.85rem;
+            background: #eff6ff;
+            padding: 10px;
+            border-radius: 6px;
+            color: #1e40af;
+        }
+        .version-list a { color: var(--primary); font-weight: 600; }
+
+        /* Modal 樣式優化 */
+        .modal {
+            position: fixed; left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: none;
+            align-items: center; justify-content: center;
+        }
+        .modal.show { display: flex; animation: fadeIn 0.2s; }
+        
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 90%; max-width: 500px;
+            padding: 0;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex; flex-direction: column;
+            max-height: 85vh;
+        }
+
+        .modal-header {
+            padding: 15px 20px;
+            background: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .modal-header h3 { margin: 0; font-size: 1.1rem; }
+        
+        .modal-body { padding: 20px; overflow-y: auto; }
+
+        .close-btn { font-size: 24px; color: #9ca3af; cursor: pointer; transition: color 0.2s; }
+        .close-btn:hover { color: var(--text-main); }
+
+        /* 評論列表樣式 */
+        .review-item {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .review-header { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-sub); }
+        .star-rating { color: #f59e0b; font-weight: bold; }
+
+        /* 動畫 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .clickable-text { color: var(--primary); cursor: pointer; font-weight: 500; }
+        .clickable-text:hover { text-decoration: underline; }
+        
+        .user-rating-box {
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+            color: #3730a3;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
     </style>
 </head>
 <body>
-    <h1>🚀 工作委託平台</h1>
-    
-    <div id="auth" class="card">
-        <h2>登入 / 註冊</h2>
-        <input type="text" id="username" placeholder="帳號">
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="密碼">
-        <select id="role">
-            <option value="client">委託人</option>
-            <option value="contractor">接案人</option>
-        </select>
-        <button onclick="doRegister()">註冊</button>
-        <button onclick="doLogin()">登入</button>
-    </div>
 
-    <div id="client" class="card hidden">
-        <h2>委託人面板</h2>
-        <p>使用者：<strong id="clientName"></strong></p>
+    <div class="container">
+        <h1><i class="fa-solid fa-rocket"></i> WorkFlow 平台</h1>
         
-        <h3>建立專案</h3>
-        <input type="text" id="title" placeholder="專案標題">
-        <textarea id="desc" placeholder="專案描述"></textarea>
-        <input type="number" id="budget" placeholder="預算">
-        <label for="deadline">截止時間（限時競標）：</label>
-        <input type="datetime-local" id="deadline">
+        <div id="auth" class="card">
+            <h2><i class="fa-solid fa-right-to-bracket"></i> 登入 / 註冊</h2>
+            <div style="margin-top: 20px;">
+                <label>帳號</label>
+                <input type="text" id="username" placeholder="請輸入帳號">
+                
+                <label>Email</label>
+                <input type="email" id="email" placeholder="example@email.com">
+                
+                <label>密碼</label>
+                <input type="password" id="password" placeholder="••••••••">
+                
+                <label>選擇身分</label>
+                <select id="role">
+                    <option value="client">我是委託人 (發案)</option>
+                    <option value="contractor">我是接案人 (接案)</option>
+                </select>
+                
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn-primary" onclick="doLogin()">登入</button>
+                    <button class="btn-secondary" onclick="doRegister()">註冊</button>
+                </div>
+            </div>
+        </div>
 
-        <button onclick="createProject()">建立專案</button>
-        <button onclick="loadMyProjects()">查看我的專案</button>
-        <div id="clientProjects"></div>
-        <button onclick="doLogout()">登出</button>
-    </div>
+        <div id="client" class="card hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2><i class="fa-solid fa-user-tie"></i> 委託人面板</h2>
+                <button class="btn-danger btn-sm" style="width: auto;" onclick="doLogout()">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i> 登出
+                </button>
+            </div>
+            
+            <p class="user-info">歡迎回來，<strong id="clientName"></strong></p>
+            
+            <div class="card" style="border: 1px solid #e5e7eb; box-shadow: none;">
+                <h3 style="margin-top: 0;"><i class="fa-solid fa-plus-circle"></i> 建立新專案</h3>
+                <input type="text" id="title" placeholder="專案標題">
+                <textarea id="desc" placeholder="請詳細描述需求..." rows="3"></textarea>
+                
+                <div style="display: flex; gap: 15px;">
+                    <div style="flex: 1;">
+                        <label>預算 (NT$)</label>
+                        <input type="number" id="budget" placeholder="例如: 5000">
+                    </div>
+                    <div style="flex: 1;">
+                        <label>截止時間</label>
+                        <input type="datetime-local" id="deadline">
+                    </div>
+                </div>
 
-    <div id="contractor" class="card hidden">
-        <h2>接案人面板</h2>
-        <p>使用者：<strong id="contractorName"></strong></p>
+                <button class="btn-primary" onclick="createProject()">
+                    <i class="fa-solid fa-paper-plane"></i> 發布專案
+                </button>
+            </div>
 
-        <button onclick="loadOpenProjects()">瀏覽專案</button>
-        <div id="openProjects"></div>
-        <button onclick="loadMyProjects()">我的專案</button>
-        <div id="contractorProjects"></div>
-        <button onclick="doLogout()">登出</button>
-    </div>
-   
-    <div id="issuePanel" class="card hidden">
-        <h2>Issue / 結案待處理事項</h2>
-        <button onclick="closeIssuePanel()">關閉</button>
-        <div id="issueContent" style="margin-top: 10px;"></div>
+            <div style="border-bottom: 2px solid #e5e7eb; margin: 30px 0;"></div>
+            
+            <h3><i class="fa-solid fa-list-check"></i> 我的專案列表</h3>
+            <button class="btn-secondary" style="margin-bottom: 15px;" onclick="loadMyProjects()">
+                <i class="fa-solid fa-rotate"></i> 重新整理
+            </button>
+            <div id="clientProjects"></div>
+        </div>
+
+        <div id="contractor" class="card hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2><i class="fa-solid fa-laptop-code"></i> 接案人面板</h2>
+                <button class="btn-danger btn-sm" style="width: auto;" onclick="doLogout()">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i> 登出
+                </button>
+            </div>
+            
+            <p class="user-info">歡迎回來，<strong id="contractorName"></strong></p>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="btn-primary" onclick="loadOpenProjects()">
+                    <i class="fa-solid fa-magnifying-glass"></i> 瀏覽可接案專案
+                </button>
+                <button class="btn-secondary" onclick="loadMyProjects()">
+                    <i class="fa-solid fa-folder-open"></i> 我的專案
+                </button>
+            </div>
+
+            <div id="openProjects"></div>
+            <div id="contractorProjects"></div>
+        </div>
+    
+        <div id="issuePanel" class="card hidden" style="border-left: 5px solid var(--warning);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; border: none; color: var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> Issue / 待處理事項</h2>
+                <button class="btn-secondary btn-sm" onclick="closeIssuePanel()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="issueContent" style="margin-top: 20px;"></div>
+        </div>
     </div>
 
     <div id="reviewModal" class="modal">
         <div class="modal-content">
-            <span class="close-btn" onclick="closeReviewModal()">&times;</span>
-            <h3>📜 詳細評論紀錄</h3>
-            <div id="modalBody"></div>
+            <div class="modal-header">
+                <h3>📜 詳細評論紀錄</h3>
+                <span class="close-btn" onclick="closeReviewModal()">&times;</span>
+            </div>
+            <div id="modalBody" class="modal-body"></div>
         </div>
     </div>
 
-
-<script>
+    <script>
         const API = 'http://127.0.0.1:8080';
         let user = null;
-        let currentIssueProjectId = null; // 目前正在查看 Issue 的專案 ID
+        let currentIssueProjectId = null; 
         
+        // ==========================================
+        //  UI 輔助函數
+        // ==========================================
+        function getStatusBadge(status) {
+            const map = {
+                'draft': '<span class="badge badge-status" style="background:#cbd5e1; color:#475569">草稿</span>',
+                'open': '<span class="badge badge-status" style="background:#dbeafe; color:#1e40af">開放接案</span>',
+                'in_progress': '<span class="badge badge-status" style="background:#fef3c7; color:#b45309">進行中</span>',
+                'submitted': '<span class="badge badge-status" style="background:#e0e7ff; color:#4338ca">待驗收</span>',
+                'completed': '<span class="badge badge-status" style="background:#dcfce7; color:#15803d">已完成</span>',
+                'rejected': '<span class="badge badge-status" style="background:#fee2e2; color:#b91c1c">已退件</span>'
+            };
+            return map[status] || `<span class="badge badge-status">${status}</span>`;
+        }
+
         // ==========================================
         //  【評價機制功能區】
         // ==========================================
 
-        // 1. 取得平均評價 (GET)
         async function fetchAverageRating(userId) {
             try {
                 const response = await fetch(API + '/projects/user/' + userId + '/average-rating');
@@ -212,74 +425,53 @@
                 
                 if (data.total_ratings > 0) {
                     const avgScore = data.average_score.toFixed(1); 
-                    const stars = '★'.repeat(Math.round(avgScore));
+                    const stars = '★'.repeat(Math.round(avgScore)) + '☆'.repeat(5 - Math.round(avgScore));
                     
                     return `
-                        平均分數: ${avgScore} / 5.0 ${stars} 
-                        <span class="clickable-text" onclick="openReviewModal(${userId})">
+                        <span style="font-weight:bold; color:#f59e0b;">${avgScore}</span> ${stars} 
+                        <span class="clickable-text" onclick="openReviewModal(${userId})" style="font-size:0.85em; color:#6b7280;">
                             (${data.total_ratings} 筆評價)
                         </span>
                     `;
                 }
-                return '目前尚無評價。';
+                return '<span style="color:#9ca3af; font-size:0.9em;">(暫無評價)</span>';
             } catch (e) {
-                return '無法載入評價數據。';
+                return '無法載入';
             }
         }
 
-        // 2. 取得詳細評論列表 (GET)
         async function fetchUserReviews(userId) {
             try {
                 const response = await fetch(API + `/projects/user/${userId}/reviews`);
-                if (response.ok) {
-                    return await response.json();
-                }
+                if (response.ok) return await response.json();
                 return [];
-            } catch (e) {
-                console.error("Error fetching reviews:", e);
-                return [];
-            }
+            } catch (e) { return []; }
         }
         
-        // 3. 檢查單筆評價 (GET)
         async function getRating(projectId, raterId) {
             try {
                 const response = await fetch(API + `/projects/${projectId}/rate?rater_id=${raterId}`);
-                if (response.ok) {
-                    return await response.json();
-                }
+                if (response.ok) return await response.json();
                 return null; 
-            } catch (e) {
-                return null;
-            }
+            } catch (e) { return null; }
         }
 
-        // 4. 開啟評論彈窗
         async function openReviewModal(userId) {
             const modal = document.getElementById('reviewModal');
             const modalBody = document.getElementById('modalBody');
             
-            modalBody.innerHTML = '<p style="text-align:center; color:#666;">載入中...</p>';
+            modalBody.innerHTML = '<div style="text-align:center; padding:20px;"><i class="fa-solid fa-spinner fa-spin"></i> 載入中...</div>';
             modal.classList.add('show'); 
 
             const reviews = await fetchUserReviews(userId);
 
             if (reviews.length > 0) {
                 let html = '<div class="review-list">';
-                
                 reviews.forEach(r => {
-                    const commentText = r.comment ? r.comment : '<span style="color:#aaa;">(無文字評論)</span>';
+                    const commentText = r.comment ? r.comment : '<span style="color:#aaa; font-style:italic;">(無文字評論)</span>';
                     
-                    // --- 計算這筆評論的平均分 ---
-                    const scores = [
-                        r.cooperation_attitude,
-                        r.output_quality,
-                        r.execution_efficiency,
-                        r.demand_reasonableness,
-                        r.acceptance_difficulty
-                    ];
+                    const scores = [r.cooperation_attitude, r.output_quality, r.execution_efficiency, r.demand_reasonableness, r.acceptance_difficulty];
                     const validScores = scores.filter(s => s !== null && s !== undefined);
-                    
                     let finalScore = 0;
                     if (validScores.length > 0) {
                         const sum = validScores.reduce((a, b) => a + b, 0);
@@ -288,40 +480,36 @@
 
                     html += `
                         <div class="review-item">
-                            <div class="review-meta" style="display:flex; justify-content:space-between;">
-                                <span>來自 ID: ${r.rater_id}</span>
-                                <span style="color:#f39c12; font-weight:bold;">★ ${finalScore}</span>
+                            <div class="review-header">
+                                <span><i class="fa-solid fa-user"></i> ID: ${r.rater_id}</span>
+                                <span class="star-rating">★ ${finalScore}</span>
                             </div>
-                            <div style="margin-top:5px; color:#333;">${commentText}</div>
+                            <div style="color:#374151;">${commentText}</div>
                         </div>`;
                 });
                 html += '</div>';
                 modalBody.innerHTML = html;
             } else {
-                modalBody.innerHTML = '<p style="text-align:center; color:#888;">此使用者目前沒有詳細文字評論。</p>';
+                modalBody.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">此使用者目前沒有詳細文字評論。</p>';
             }
         }
 
-        // 5. 關閉評論彈窗
         function closeReviewModal() {
             document.getElementById('reviewModal').classList.remove('show');
         }
 
         window.onclick = function(event) {
             const modal = document.getElementById('reviewModal');
-            if (event.target == modal) {
-                closeReviewModal();
-            }
+            if (event.target == modal) closeReviewModal();
         }
 
-        // 6. 顯示評價表單
         function showRatingForm(projectId, ratedUserId, roleToRate, existingRating = null) {
             const targetDiv = document.getElementById(`rating-form-${projectId}`);
             const currentRaterId = user.id;
             
             const isUpdate = existingRating !== null;
             const actionText = isUpdate ? '修改' : '提交';
-            const buttonColor = isUpdate ? '#1e88e5' : '#38c172';
+            const btnClass = isUpdate ? 'btn-primary' : 'btn-success';
             
             const defaults = {
                 cooperation: existingRating?.cooperation_attitude || 5.0,
@@ -329,36 +517,36 @@
                 efficiency: existingRating?.execution_efficiency || 4.0,
                 reasonableness: existingRating?.demand_reasonableness || 4.0,
                 difficulty: existingRating?.acceptance_difficulty || 3.5,
-                comment: existingRating?.comment || '請輸入評論...'
+                comment: existingRating?.comment || ''
             };
 
             targetDiv.innerHTML = `
-                <div style="padding: 15px; background: ${isUpdate ? '#e3f2fd' : '#fff8e1'}; border: 1px dashed ${isUpdate ? '#2196f3' : '#ffc107'}; margin-top: 10px;">
-                    <h4>對 ${roleToRate} (ID: ${ratedUserId}) ${actionText}評價</h4>
+                <div style="padding: 20px; background: #fffbeb; border: 1px dashed #f59e0b; border-radius: 8px; margin-top: 15px;">
+                    <h4 style="margin-top:0; color:#b45309;"><i class="fa-solid fa-star"></i> 對 ${roleToRate} (ID: ${ratedUserId}) ${actionText}評價</h4>
                     <form id="rate-form-${projectId}">
                         <input type="hidden" name="rater_id" value="${currentRaterId}">
                         <input type="hidden" name="rated_user_id" value="${ratedUserId}">
                         
-                        <label>合作態度 (1-5):</label>
-                        <input type="number" name="cooperation_attitude" value="${defaults.cooperation}" min="1.0" max="5.0" step="0.5" required><br>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                            <div>
+                                <label>合作態度 (1-5)</label>
+                                <input type="number" name="cooperation_attitude" value="${defaults.cooperation}" min="1.0" max="5.0" step="0.5" required>
+                            </div>
+                            
+                            ${roleToRate === '接案人' ? `
+                                <div><label>產出品質</label><input type="number" name="output_quality" value="${defaults.quality}" min="1.0" max="5.0" step="0.5"></div>
+                                <div><label>執行效率</label><input type="number" name="execution_efficiency" value="${defaults.efficiency}" min="1.0" max="5.0" step="0.5"></div>
+                            ` : `
+                                <div><label>需求合理性</label><input type="number" name="demand_reasonableness" value="${defaults.reasonableness}" min="1.0" max="5.0" step="0.5"></div>
+                                <div><label>驗收難度</label><input type="number" name="acceptance_difficulty" value="${defaults.difficulty}" min="1.0" max="5.0" step="0.5"></div>
+                            `}
+                        </div>
                         
-                        ${roleToRate === '接案人' ? `
-                            <label>產出品質 (1-5):</label>
-                            <input type="number" name="output_quality" value="${defaults.quality}" min="1.0" max="5.0" step="0.5"><br>
-                            <label>執行效率 (1-5):</label>
-                            <input type="number" name="execution_efficiency" value="${defaults.efficiency}" min="1.0" max="5.0" step="0.5"><br>
-                        ` : `
-                            <label>需求合理性 (1-5):</label>
-                            <input type="number" name="demand_reasonableness" value="${defaults.reasonableness}" min="1.0" max="5.0" step="0.5"><br>
-                            <label>驗收難度 (1-5):</label>
-                            <input type="number" name="acceptance_difficulty" value="${defaults.difficulty}" min="1.0" max="5.0" step="0.5"><br>
-                        `}
+                        <label>文字評論</label>
+                        <textarea name="comment" rows="2" placeholder="請輸入您的評價...">${defaults.comment}</textarea>
                         
-                        <label>評論:</label>
-                        <textarea name="comment" rows="2">${defaults.comment}</textarea>
-                        
-                        <button type="submit" style="background: ${buttonColor};">確認${actionText}評價</button>
-                        <p id="message-${projectId}" style="margin-top: 5px;"></p>
+                        <button type="submit" class="${btnClass}"><i class="fa-solid fa-check"></i> 確認${actionText}</button>
+                        <p id="message-${projectId}" style="margin-top: 5px; font-size:0.9rem;"></p>
                     </form>
                 </div>
             `;
@@ -369,7 +557,6 @@
             });
         }
 
-        // 7. 提交評價邏輯
         async function submitRating(projectId, isUpdate = false) {
             const form = document.getElementById(`rate-form-${projectId}`);
             const messageDiv = document.getElementById(`message-${projectId}`);
@@ -385,7 +572,7 @@
             }
             Object.keys(data).forEach(key => (data[key] === '' || data[key] == null) && delete data[key]);
 
-            messageDiv.textContent = isUpdate ? '修改中...' : '提交中...';
+            messageDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 處理中...';
             messageDiv.style.color = 'blue';
 
             const method = isUpdate ? 'PUT' : 'POST';
@@ -399,26 +586,21 @@
 
                 if (response.ok) {
                     const result = await response.json();
-                    
                     if (!isUpdate) {
                         const ratedUserId = data.rated_user_id;
                         const roleToRate = document.querySelector(`#rating-form-${projectId} h4`).innerText.includes('接案人') ? '接案人' : '委託人';
-                        
                         await showRatingForm(projectId, ratedUserId, roleToRate, result);
-                        
-                        document.getElementById(`message-${projectId}`).textContent = `評價提交成功！表單已切換為修改模式。`;
-                        document.getElementById(`message-${projectId}`).style.color = 'green';
+                        messageDiv.textContent = `評價提交成功！`;
                     } else {
                         messageDiv.textContent = `評價修改成功！`;
-                        messageDiv.style.color = 'green';
                     }
-
+                    messageDiv.style.color = 'green';
                     loadMyProjects(); 
                     displayAverageRatingArea(user.id); 
                 } else {
                     const err = await response.json();
                     if (response.status === 409 && !isUpdate) {
-                        messageDiv.textContent = '提交失敗：您已評價過，請點擊「修改評價」按鈕。';
+                        messageDiv.textContent = '提交失敗：您已評價過。';
                         messageDiv.style.color = 'orange';
                     } else {
                         throw new Error(err.detail || '操作失敗');
@@ -430,7 +612,6 @@
             }
         }
 
-        // 8. 顯示使用者平均評價
         async function displayAverageRatingArea(userId) {
              const avgRatingText = await fetchAverageRating(userId);
              const targetDiv = document.getElementById(user.role === 'client' ? 'client' : 'contractor');
@@ -440,16 +621,16 @@
 
              const avgDiv = document.createElement('div');
              avgDiv.id = 'user-avg-rating';
-             avgDiv.className = 'card';
-             avgDiv.style.backgroundColor = '#e6e6fa';
+             avgDiv.className = 'user-rating-box';
+             avgDiv.innerHTML = `<i class="fa-solid fa-medal fa-lg"></i> <div><strong>我的信用評價</strong><br>${avgRatingText}</div>`;
              
-             avgDiv.innerHTML = `<h3>⭐ 我的平均評價</h3><p>${avgRatingText}</p>`;
-             
-             targetDiv.insertBefore(avgDiv, targetDiv.querySelector('h2').nextSibling);
+             // 插入到標題和按鈕之間
+             const h2 = targetDiv.querySelector('h2');
+             h2.parentNode.insertBefore(avgDiv, h2.nextSibling.nextSibling);
         }
 
         // ==========================================
-        //  【原有功能區 (含身分驗證)】
+        //  【基本功能】
         // ==========================================
 
         function doRegister() {
@@ -459,16 +640,13 @@
                 password: document.getElementById('password').value,
                 role: document.getElementById('role').value
             };
-
             fetch(API + '/auth/register', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
             })
             .then(r => r.json())
-            .then(() => {
-                alert('註冊成功！請登入');
-            })
+            .then(() => alert('註冊成功！請登入'))
             .catch(e => alert('錯誤：' + e));
         }
 
@@ -477,7 +655,6 @@
                 username: document.getElementById('username').value,
                 password: document.getElementById('password').value
             };
-
             fetch(API + '/auth/login', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -486,10 +663,7 @@
             .then(r => r.json())
             .then(d => {
                 user = d.user;
-                if (!user) {
-                    alert('登入失敗');
-                    return;
-                }
+                if (!user) { alert('登入失敗'); return; }
                 document.getElementById('auth').classList.add('hidden');
                 
                 if (user.role === 'client') {
@@ -499,7 +673,6 @@
                     document.getElementById('contractor').classList.remove('hidden');
                     document.getElementById('contractorName').textContent = user.username;
                 }
-                
                 loadMyProjects();
                 displayAverageRatingArea(user.id);
             })
@@ -515,88 +688,84 @@
             window.location.reload(); 
         }
 
-        // ================== 專案建立 / 查詢 ==================
-
         function createProject() {
             const title = document.getElementById('title').value;
             const desc = document.getElementById('desc').value;
             const budget = parseFloat(document.getElementById('budget').value);
-
             const deadlineInput = document.getElementById('deadline').value;
+            
             let deadline = null;
-            if (deadlineInput) {
-                deadline = deadlineInput + ':00'; 
-            }
-
-            const data = {
-                title: title,
-                description: desc,
-                budget: budget,
-                deadline: deadline
-            };
+            if (deadlineInput) deadline = deadlineInput + ':00'; 
 
             fetch(API + '/projects/?client_id=' + user.id, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
+                body: JSON.stringify({ title, description: desc, budget, deadline })
             })
             .then(r => r.json())
             .then(() => {
                 alert('專案建立成功！');
                 loadMyProjects();
+                // 清空輸入
+                document.getElementById('title').value = '';
+                document.getElementById('desc').value = '';
+                document.getElementById('budget').value = '';
             });
         }
 
         function formatDeadline(deadline) {
-            if (!deadline) return '未設定';
+            if (!deadline) return '<span style="color:#9ca3af">未設定</span>';
             try {
                 return new Date(deadline).toLocaleString();
-            } catch {
-                return deadline;
-            }
+            } catch { return deadline; }
         }
 
         function loadMyProjects() {
             fetch(API + '/projects/user/' + user.id)
             .then(r => r.json())
             .then(projects => {
-                // 使用 async/await 處理評價資料的獲取
                 const projectPromises = projects.map(async p => {
                      let clientRatingText = '';
                      let contractorRatingText = '';
-                     
                      if (p.status === 'completed' && p.contractor_id) {
                         clientRatingText = await fetchAverageRating(p.client_id);
                         contractorRatingText = await fetchAverageRating(p.contractor_id);
                      }
-
                     const actionsHtml = await getActions(p);
-
-                    // 結案網址顯示邏輯
                     const submissionLink = p.submission_file_url
-                            ? `<a href="${API}${p.submission_file_url}" target="_blank" rel="noopener">下載</a>`
-                            : '尚未結案';
+                            ? `<a href="${API}${p.submission_file_url}" target="_blank" rel="noopener" class="clickable-text"><i class="fa-solid fa-download"></i> 下載檔案</a>`
+                            : '<span style="color:#9ca3af">尚未上傳</span>';
 
-                    return `<div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:3px solid #667eea;">
-                        <strong>ID: ${p.id} - ${p.title}</strong><br>
-                        ${p.description}<br>
-                        預算: ${p.budget ?? '未設定'} | 狀態: <strong>${p.status}</strong><br>
-                        截止時間: ${formatDeadline(p.deadline)}<br>
-                        最新結案網址: ${submissionLink}<br>
+                    return `<div class="project-item">
+                        <div class="project-header">
+                            <span class="project-title">#${p.id} ${p.title}</span>
+                            ${getStatusBadge(p.status)}
+                        </div>
+                        <div class="project-meta">
+                            <span class="badge badge-budget"><i class="fa-solid fa-dollar-sign"></i> 預算: ${p.budget ?? '未設定'}</span>
+                            <span class="badge badge-deadline"><i class="fa-regular fa-clock"></i> 截止: ${formatDeadline(p.deadline)}</span>
+                        </div>
+                        <div class="project-desc">${p.description}</div>
+                        
+                        <div style="font-size:0.9em; margin-bottom:15px; color:#4b5563;">
+                            <strong>最新結案檔案：</strong> ${submissionLink}
+                        </div>
                         
                         ${p.status === 'completed' && p.contractor_id ? 
-                            `<div style="margin-top: 5px; color: #555;">
-                                <div>委託人平均: ${clientRatingText}</div>
-                                <div>接案人平均: ${contractorRatingText}</div>
+                            `<div style="margin-bottom: 15px; padding:10px; background:#f0f9ff; border-radius:8px; font-size:0.9em;">
+                                <div style="margin-bottom:5px;"><strong>委託人信用:</strong> ${clientRatingText}</div>
+                                <div><strong>接案人信用:</strong> ${contractorRatingText}</div>
                              </div>` : ''}
                              
-                        ${actionsHtml}
-                        <div id="versions-${p.id}" class="version-list"></div>
+                        <div class="action-bar">
+                            ${actionsHtml}
+                        </div>
+                        <div id="versions-${p.id}" class="version-list" style="display:none;"></div>
                     </div>`;
                 });
 
                 Promise.all(projectPromises).then(htmlArray => {
-                    const html = htmlArray.join('');
+                    const html = htmlArray.length ? htmlArray.join('') : '<p style="text-align:center; color:#9ca3af;">目前沒有專案</p>';
                     if (user.role === 'client') {
                         document.getElementById('clientProjects').innerHTML = html;
                     } else {
@@ -610,24 +779,43 @@
             fetch(API + '/projects/')
             .then(r => r.json())
             .then(projects => {
+                if(projects.length === 0) {
+                    document.getElementById('openProjects').innerHTML = '<p style="text-align:center; color:#9ca3af;">目前沒有開放中的專案</p>';
+                    return;
+                }
+                
                 const projectPromises = projects.map(async p => {
                     const clientRatingHtml = await fetchAverageRating(p.client_id);
 
-                    return `<div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:5px solid #e67e22;">
-                        <strong>${p.title}</strong><br>
+                    return `<div class="project-item" style="border-left: 5px solid var(--warning);">
+                        <div class="project-header">
+                            <span class="project-title">${p.title}</span>
+                            <span style="font-size:0.9em;">委託人 ID: ${p.client_id}</span>
+                        </div>
                         
-                        <div style="margin: 5px 0; font-size: 0.9em; background: #fff3e0; padding: 5px; border-radius: 4px;">
+                        <div class="user-rating-box" style="padding:8px; margin-bottom:10px; font-size:0.9em;">
                             委託人信用: ${clientRatingHtml}
                         </div>
 
-                        ${p.description}<br>
-                        預算: ${p.budget ?? '未設定'}<br>
-                        截止時間: ${formatDeadline(p.deadline)}<br><br>
+                        <div class="project-meta">
+                            <span class="badge badge-budget">預算: ${p.budget ?? '未設定'}</span>
+                            <span class="badge badge-deadline">截止: ${formatDeadline(p.deadline)}</span>
+                        </div>
+
+                        <div class="project-desc">${p.description}</div>
                         
-                        報價金額：<input type="number" id="price-${p.id}" placeholder="金額"><br>
-                        提案說明：<input type="text" id="pdesc-${p.id}" placeholder="簡短說明"><br>
-                        上傳提案 PDF：<input type="file" id="pfile-${p.id}" accept="application/pdf"><br>
-                        <button class="sub-btn" onclick="makeProposal(${p.id})">提出報價</button>
+                        <div style="background:#f8fafc; padding:15px; border-radius:8px; border:1px solid #e2e8f0;">
+                            <h4 style="margin-top:0; margin-bottom:10px;">我要報價</h4>
+                            <div style="display:grid; grid-template-columns: 1fr 2fr; gap:10px;">
+                                <input type="number" id="price-${p.id}" placeholder="報價金額 ($)">
+                                <input type="text" id="pdesc-${p.id}" placeholder="簡短說明提案內容">
+                            </div>
+                            <label style="font-size:0.85em; margin-bottom:5px;">上傳提案 PDF (必填)</label>
+                            <input type="file" id="pfile-${p.id}" accept="application/pdf">
+                            <button class="btn-primary" onclick="makeProposal(${p.id})">
+                                <i class="fa-solid fa-hand-point-up"></i> 提出報價
+                            </button>
+                        </div>
                     </div>`;
                 });
 
@@ -637,98 +825,57 @@
             });
         }
 
-        // ================== 提案（含 PDF 上傳） ==================
-
         async function makeProposal(pid) {
             const priceInput = document.getElementById(`price-${pid}`);
             const descInput  = document.getElementById(`pdesc-${pid}`);
             const fileInput  = document.getElementById(`pfile-${pid}`);
 
             const priceVal = parseFloat(priceInput.value);
-            const desc = descInput.value;
-            const file = fileInput.files[0];
-
-            if (isNaN(priceVal)) {
-                alert('請輸入有效的報價金額');
-                return;
-            }
-            if (!file) {
-                alert('請選擇要上傳的 PDF 檔案');
-                return;
-            }
-            if (file.type !== 'application/pdf') {
-                alert('僅接受 PDF 檔案');
-                return;
-            }
+            if (isNaN(priceVal)) { alert('請輸入有效的報價金額'); return; }
+            if (!fileInput.files[0]) { alert('請選擇要上傳的 PDF 檔案'); return; }
+            if (fileInput.files[0].type !== 'application/pdf') { alert('僅接受 PDF 檔案'); return; }
 
             const formData = new FormData();
             formData.append('price', priceVal);
-            formData.append('description', desc);
-            formData.append('file', file);
+            formData.append('description', descInput.value);
+            formData.append('file', fileInput.files[0]);
 
             try {
-                const resp = await fetch(
-                    API + '/projects/' + pid + '/proposals?contractor_id=' + user.id,
-                    {
-                        method: 'POST',
-                        body: formData
-                    }
-                );
-
+                const resp = await fetch(API + '/projects/' + pid + '/proposals?contractor_id=' + user.id, {
+                    method: 'POST',
+                    body: formData
+                });
                 const data = await resp.json();
-
-                if (!resp.ok) {
-                    alert('提案失敗：' + (data.detail || JSON.stringify(data)));
-                    return;
-                }
-
-                alert('提案已送出！(ID: ' + (data.proposal_id || '') + ')');
-            } catch (e) {
-                alert('提案失敗(網路錯誤)：' + e);
-            }
+                if (!resp.ok) { alert('提案失敗：' + (data.detail || JSON.stringify(data))); return; }
+                alert('提案已送出！');
+                loadOpenProjects(); // Refresh
+            } catch (e) { alert('提案失敗：' + e); }
         }
-
-        // ================== 選擇接案人 & 結案 ==================
 
         function selectContractor(pid) {
             fetch(API + `/projects/${pid}/proposals`)
             .then(r => r.json())
             .then(async proposals => { 
-                
-                if (proposals.length === 0) {
-                    alert("目前還沒有人提案喔！");
-                    return;
-                }
+                if (proposals.length === 0) { alert("目前還沒有人提案喔！"); return; }
 
                 const listPromises = proposals.map(async (p, i) => {
                     let scoreText = "無評價";
                     try {
                         const res = await fetch(API + '/projects/user/' + p.contractor_id + '/average-rating');
                         const data = await res.json();
-                        if (data.total_ratings > 0) {
-                            scoreText = `${data.average_score}★ (${data.total_ratings}評)`;
-                        }
-                    } catch (e) {
-                        scoreText = "讀取失敗";
-                    }
-                    
-                    return `${i+1}. 提案ID:${p.id} / 接案人ID:${p.contractor_id} [評分: ${scoreText}] - $${p.price}\n   說明: ${p.description}`;
+                        if (data.total_ratings > 0) scoreText = `${data.average_score}★ (${data.total_ratings}評)`;
+                    } catch (e) {}
+                    return `${i+1}. 提案ID:${p.id} / 接案人ID:${p.contractor_id} [${scoreText}] - $${p.price}\n   說明: ${p.description}`;
                 });
 
                 const listItems = await Promise.all(listPromises);
-                const listStr = listItems.join('\n\n');
-
-                const choice = prompt('請輸入編號選擇接案人：\n\n' + listStr);
+                const choice = prompt('請輸入編號選擇接案人：\n\n' + listItems.join('\n'));
                 
                 if (choice) {
                     const index = parseInt(choice) - 1;
                     if (index >= 0 && index < proposals.length) {
-                        const selected = proposals[index];
-                        fetch(API + '/projects/' + pid + '/select-contractor?contractor_id=' + selected.contractor_id, {method: 'POST'})
-                        .then(() => {
-                            alert('已選擇接案人！');
-                            loadMyProjects();
-                        });
+                        fetch(API + '/projects/' + pid + '/select-contractor?contractor_id=' + proposals[index].contractor_id, {method: 'POST'})
+                        .then(() => { alert('已選擇接案人！'); loadMyProjects(); });
                     }
                 }
             });
@@ -736,177 +883,92 @@
 
         async function submitWork(pid) {
             const fileInput = document.getElementById(`submit-file-${pid}`);
-            if (!fileInput || fileInput.files.length === 0) {
-                alert('請先選擇要上傳的結案檔案');
-                return;
-            }
-            const file = fileInput.files[0];
-
+            if (!fileInput || fileInput.files.length === 0) { alert('請先選擇要上傳的結案檔案'); return; }
+            
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', fileInput.files[0]);
 
             try {
-                const resp = await fetch(API + `/projects/${pid}/submit`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!resp.ok) {
-                    const data = await resp.json().catch(() => ({}));
-                    throw new Error(data.detail || resp.statusText);
-                }
-
+                const resp = await fetch(API + `/projects/${pid}/submit`, { method: 'POST', body: formData });
+                if (!resp.ok) throw new Error('上傳失敗');
                 alert('已提交結案！');
                 loadMyProjects();
-            } catch (e) {
-                alert('上傳失敗：' + e);
-            }
+            } catch (e) { alert('上傳失敗：' + e); }
         }
 
         function acceptWork(pid) {
+            if(!confirm('確定要驗收並結案嗎？')) return;
             fetch(API + '/projects/' + pid + '/accept', {method: 'POST'})
             .then(async r => {
                 if (!r.ok) {
-                    let err = {};
-                    try { err = await r.json(); } catch (_) {}
+                    let err = {}; try { err = await r.json(); } catch (_) {}
                     if (r.status === 400 && err.detail) {
                         alert('無法結案：' + err.detail);
-                        // 若因為有未處理 Issue 無法結案，幫你打開 Issue 面板
                         viewIssues(pid);
-                    } else {
-                        alert('接受結案失敗');
-                    }
-                    throw new Error('accept failed');
+                    } else { throw new Error('failed'); }
+                } else {
+                    alert('已接受結案！請進行評價。');
+                    loadMyProjects();
                 }
-                return r.json();
-            })
-            .then(() => {
-                alert('已接受結案！');
-                loadMyProjects();
             })
             .catch(e => console.log(e));
         }
 
         function rejectWork(pid) {
-            const reason = prompt('退件原因：');
+            const reason = prompt('請輸入退件原因：');
             if (!reason) return;
-
             fetch(API + `/projects/${pid}/reject`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({rejection_reason: reason})
-            })
-            .then(() => {
-                alert('已退件！');
-                loadMyProjects();
-            });
+            }).then(() => { alert('已退件！'); loadMyProjects(); });
         }
-
-        // ================== 結案版本列表（下載連結） ==================
 
         function showSubmissionVersions(pid) {
             fetch(API + `/projects/${pid}/submissions`)
             .then(r => r.json())
             .then(data => {
-                let list = [];
-                if (Array.isArray(data)) {
-                    list = data;
-                } else if (data && Array.isArray(data.versions)) {
-                    list = data.versions;
-                }
-
+                let list = Array.isArray(data) ? data : (data.versions || []);
                 const container = document.getElementById(`versions-${pid}`);
-
-                if (!list || list.length === 0) {
-                    container.innerHTML = '目前沒有任何結案版本';
-                    return;
-                }
-
-                const html = list.map(v =>
-                    `<div>v${v.version}：<a href="${API}${v.submit_url}" target="_blank" rel="noopener">下載</a></div>`
-                ).join('');
-
-                container.innerHTML = html;
-            })
-            .catch(e => {
-                alert('讀取版本列表失敗：' + e);
+                container.style.display = 'block';
+                
+                if (list.length === 0) { container.innerHTML = '無歷史版本'; return; }
+                container.innerHTML = '<strong><i class="fa-solid fa-code-branch"></i> 歷史版本：</strong><br>' + 
+                    list.map(v => `v${v.version} (<span style="font-size:0.85em">${new Date(v.created_at).toLocaleString()}</span>)：<a href="${API}${v.submit_url}" target="_blank">下載</a>`).join('<br>');
             });
         }
 
-        // ================== 修改專案 (含截止時間) ==================
-
         function editProject(pid) {
-            fetch(API + '/projects/' + pid)
-            .then(r => r.json())
-            .then(project => {
-                const newTitle = prompt('修改標題：', project.title);
-                if (!newTitle) return;
-
-                const newDesc = prompt('修改描述：', project.description);
-                if (!newDesc) return;
-
-                const newBudget = prompt('修改預算：', project.budget);
-                if (!newBudget) return;
-
-                const newDeadlineRaw = prompt(
-                    '修改截止時間 (原值：' + formatDeadline(project.deadline) + ')\n格式：YYYY-MM-DD HH:MM，留空表示不變'
-                );
-                let deadline = project.deadline;
-                if (newDeadlineRaw) {
-                    const safe = newDeadlineRaw.replace(' ', 'T');
-                    deadline = safe + ':00'; 
-                }
-
+            // (為了簡化，這裡維持 prompt，實際專案建議做成 Modal)
+            fetch(API + '/projects/' + pid).then(r => r.json()).then(p => {
+                const newTitle = prompt('修改標題：', p.title); if(!newTitle) return;
+                const newDesc = prompt('修改描述：', p.description);
+                const newBudget = prompt('修改預算：', p.budget);
+                
                 fetch(API + `/projects/${pid}`, {
                     method: 'PUT',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        title: newTitle,
-                        description: newDesc,
-                        budget: parseFloat(newBudget),
-                        deadline: deadline
-                    })
-                })
-                .then(r => r.json())
-                .then(() => {
-                    alert('專案已更新！');
-                    loadMyProjects();
-                })
-                .catch(e => alert('更新失敗：' + e));
+                    body: JSON.stringify({ title: newTitle, description: newDesc, budget: parseFloat(newBudget) })
+                }).then(() => { alert('已更新'); loadMyProjects(); });
             });
         }
 
-        // ========== Issue 前端功能 (來自 Main) ==========
-
+        // ========== Issue 功能 ==========
         function closeIssuePanel() {
             document.getElementById('issuePanel').classList.add('hidden');
-            document.getElementById('issueContent').innerHTML = '';
             currentIssueProjectId = null;
         }
 
         function createIssue(pid) {
-            const title = prompt('Issue 標題：');
-            if (!title) return;
-            const desc = prompt('Issue 描述（可留空）：') || '';
-            
+            const title = prompt('Issue 標題：'); if (!title) return;
+            const desc = prompt('Issue 描述：') || '';
             fetch(API + '/projects/' + pid + '/issues?creator_id=' + user.id, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({title: title, description: desc})
-            })
-            .then(async r => {
-                if (!r.ok) {
-                    let err = {};
-                    try { err = await r.json(); } catch (_) {}
-                    throw err;
-                }
-                return r.json();
-            })
-            .then(issue => {
-                alert('Issue 已建立！');
-                viewIssues(pid);
-            })
-            .catch(e => alert('建立 Issue 失敗：' + (e.detail || JSON.stringify(e))));
+                body: JSON.stringify({title, description: desc})
+            }).then(r => r.ok ? r.json() : Promise.reject(r)).then(() => {
+                alert('Issue 已建立'); viewIssues(pid);
+            }).catch(() => alert('建立失敗'));
         }
 
         function viewIssues(pid) {
@@ -915,175 +977,115 @@
             .then(r => r.json())
             .then(issues => {
                 const container = document.getElementById('issueContent');
-                let html = `<p>專案 ID: ${pid} 的 Issue 列表</p>`;
+                let html = `<h3 style="margin-top:0;">專案 #${pid} 待處理事項</h3>`;
                 
-                if (user.role === 'client') {
-                    html += `<button onclick="createIssue(${pid})">＋ 新增 Issue</button>`;
-                }
+                if (user.role === 'client') html += `<button class="btn-warning btn-sm" onclick="createIssue(${pid})"><i class="fa-solid fa-plus"></i> 新增 Issue</button>`;
 
-                if (issues.length === 0) {
-                    html += `<p style="margin-top:10px;">目前尚無 Issue。</p>`;
-                } else {
+                if (issues.length === 0) html += `<p style="color:#64748b;">目前沒有 Issue，一切順利！</p>`;
+                else {
                     html += issues.map(i => `
-                        <div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:3px solid ${i.status === 'open' ? '#ff9800' : '#4caf50'};">
-                            <strong>[${i.status === 'open' ? '待處理' : '已完成'}] ${i.title}</strong><br>
-                            ${i.description || ''}<br>
-                            建立時間：${new Date(i.created_at).toLocaleString()}<br>
-                            ${i.resolved_at ? '完成時間：' + new Date(i.resolved_at).toLocaleString() + '<br>' : ''}
-                            <button onclick="showIssueComments(${i.id})">查看留言</button>
-                            <button onclick="addIssueComment(${i.id})">新增留言</button>
-                            ${user.role === 'client' && i.status === 'open'
-                                ? `<button onclick="resolveIssue(${i.id})">標記為已完成</button>`
-                                : ''}
+                        <div style="background:#fff; border-left:4px solid ${i.status === 'open' ? '#f59e0b' : '#10b981'}; padding:15px; margin-bottom:10px; border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                            <div style="display:flex; justify-content:space-between;">
+                                <strong>${i.title}</strong>
+                                <span class="badge" style="background:${i.status === 'open' ? '#fef3c7' : '#dcfce7'}; color:${i.status === 'open' ? '#b45309' : '#15803d'}">${i.status === 'open' ? '待處理' : '已解決'}</span>
+                            </div>
+                            <p style="margin:5px 0; color:#4b5563;">${i.description || ''}</p>
+                            <div style="font-size:0.85em; color:#94a3b8; margin-bottom:10px;">${new Date(i.created_at).toLocaleString()}</div>
+                            
+                            <div style="display:flex; gap:5px;">
+                                <button class="btn-secondary btn-sm" onclick="showIssueComments(${i.id})">留言 (${i.comments ? i.comments.length : '查看'})</button>
+                                <button class="btn-secondary btn-sm" onclick="addIssueComment(${i.id})">新增留言</button>
+                                ${user.role === 'client' && i.status === 'open' ? `<button class="btn-success btn-sm" onclick="resolveIssue(${i.id})">標記完成</button>` : ''}
+                            </div>
                         </div>
                     `).join('');
                 }
-
                 container.innerHTML = html;
                 document.getElementById('issuePanel').classList.remove('hidden');
             });
         }
 
         function showIssueComments(issueId) {
-            if (!currentIssueProjectId) {
-                alert('請先從專案打開 Issue 列表');
-                return;
-            }
             fetch(API + '/projects/' + currentIssueProjectId + '/issues/' + issueId + '/comments')
             .then(r => r.json())
             .then(comments => {
-                if (comments.length === 0) {
-                    alert('目前沒有留言');
-                    return;
-                }
-                const text = comments.map(c => 
-                    `#${c.id} 來自使用者 ${c.sender_id}：\n${c.content}\n時間：${new Date(c.created_at).toLocaleString()}`
-                ).join('\n\n---\n\n');
-                alert(text);
+                const text = comments.length ? comments.map(c => `[${new Date(c.created_at).toLocaleTimeString()}] 用户${c.sender_id}: ${c.content}`).join('\n') : '無留言';
+                alert(text); // 簡單處理
             });
         }
 
         function addIssueComment(issueId) {
-            if (!currentIssueProjectId) {
-                alert('請先從專案打開 Issue 列表');
-                return;
-            }
-            const content = prompt('留言內容：');
-            if (!content) return;
-
+            const content = prompt('留言內容：'); if(!content) return;
             fetch(API + '/projects/' + currentIssueProjectId + '/issues/' + issueId + '/comments?sender_id=' + user.id, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({content: content})
-            })
-            .then(async r => {
-                if (!r.ok) {
-                    let err = {};
-                    try { err = await r.json(); } catch (_) {}
-                    throw err;
-                }
-                return r.json();
-            })
-            .then(() => {
-                alert('留言已送出！');
-            })
-            .catch(e => alert('留言失敗：' + (e.detail || JSON.stringify(e))));
+                body: JSON.stringify({content})
+            }).then(() => alert('留言已送出'));
         }
 
         function resolveIssue(issueId) {
-            if (!currentIssueProjectId) {
-                alert('請先從專案打開 Issue 列表');
-                return;
-            }
-            if (!confirm('確認將此 Issue 標記為已完成？')) return;
-
-            fetch(API + '/projects/' + currentIssueProjectId + '/issues/' + issueId + '/resolve?resolver_id=' + user.id, {
-                method: 'POST'
-            })
-            .then(async r => {
-                if (!r.ok) {
-                    let err = {};
-                    try { err = await r.json(); } catch (_) {}
-                    throw err;
-                }
-                return r.json();
-            })
-            .then(() => {
-                alert('Issue 已標記為完成！');
-                viewIssues(currentIssueProjectId);
-                loadMyProjects();
-            })
-            .catch(e => alert('操作失敗：' + (e.detail || JSON.stringify(e))));
+            if(!confirm('確認解決此 Issue？')) return;
+            fetch(API + '/projects/' + currentIssueProjectId + '/issues/' + issueId + '/resolve?resolver_id=' + user.id, {method: 'POST'})
+            .then(() => { alert('已標記完成'); viewIssues(currentIssueProjectId); });
         }
-
-        // ========== 根據角色與專案狀態顯示按鈕 (整合功能版) ==========
 
         async function getActions(p) { 
             let buttons = '';
             
-            // 1. 如果專案已完成，顯示評價按鈕 (Main) & 版本列表 (Feature)
+            // 評價與版本列表
             if (p.status === 'completed' && p.contractor_id) {
                 const ratedDivId = `rating-form-${p.id}`;
                 let ratedUserId, roleToRate;
-                
-                if (user.role === 'client' && user.id === p.client_id) {
-                     ratedUserId = p.contractor_id;
-                     roleToRate = '接案人';
-                } else if (user.role === 'contractor' && user.id === p.contractor_id) {
-                     ratedUserId = p.client_id;
-                     roleToRate = '委託人';
-                }
+                if (user.role === 'client' && user.id === p.client_id) { ratedUserId = p.contractor_id; roleToRate = '接案人'; }
+                else if (user.role === 'contractor' && user.id === p.contractor_id) { ratedUserId = p.client_id; roleToRate = '委託人'; }
 
                 if (ratedUserId) {
                     const existingRating = await getRating(p.id, user.id);
-                    
                     if (existingRating) {
                         const ratingJson = JSON.stringify(existingRating).replace(/"/g, '&quot;');
-                        buttons += `<button style="background: #1e88e5;" onclick="showRatingForm(${p.id}, ${ratedUserId}, '${roleToRate}', ${ratingJson})">修改評價 ${roleToRate}</button>`;
+                        buttons += `<button class="btn-primary btn-sm" onclick="showRatingForm(${p.id}, ${ratedUserId}, '${roleToRate}', ${ratingJson})"><i class="fa-solid fa-pen-to-square"></i> 修改評價</button>`;
                     } else {
-                        buttons += `<button onclick="showRatingForm(${p.id}, ${ratedUserId}, '${roleToRate}')">評價 ${roleToRate}</button>`;
+                        buttons += `<button class="btn-success btn-sm" onclick="showRatingForm(${p.id}, ${ratedUserId}, '${roleToRate}')"><i class="fa-solid fa-star"></i> 評價對方</button>`;
                     }
                     buttons += `<div id="${ratedDivId}"></div>`;
                 }
-                // Feature: 完成也顯示版本列表
-                buttons += `<button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
+                buttons += `<button class="btn-secondary btn-sm" onclick="showSubmissionVersions(${p.id})"><i class="fa-solid fa-clock-rotate-left"></i> 歷史結案版本</button>`;
             }
             
-            // 2. 根據角色顯示操作按鈕
+            // 操作按鈕
             if (user.role === 'client') {
                 if (p.status === 'open') {
-                    buttons += `<br>
-                        <button class="sub-btn" onclick="editProject(${p.id})">修改專案</button>
-                        <button class="sub-btn" onclick="selectContractor(${p.id})">選擇接案人</button>`;
+                    buttons += `
+                        <button class="btn-secondary btn-sm" onclick="editProject(${p.id})"><i class="fa-solid fa-pen"></i> 修改</button>
+                        <button class="btn-primary btn-sm" onclick="selectContractor(${p.id})"><i class="fa-solid fa-user-check"></i> 選擇接案人</button>`;
                 } else if (p.status === 'submitted') {
-                    // Main: Issue & Accept/Reject
-                    // Feature: Show versions
-                    buttons += `<br>
-                        <button class="sub-btn" onclick="viewIssues(${p.id})">查看 / 管理 Issue</button>
-                        <button class="sub-btn" onclick="createIssue(${p.id})">新增 Issue</button>
-                        <button class="sub-btn" onclick="acceptWork(${p.id})" style="background:#4caf50;">接受</button> 
-                        <button class="sub-btn" onclick="rejectWork(${p.id})" style="background:#f44336;">退件</button>
-                        <button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
+                    buttons += `
+                        <button class="btn-warning btn-sm" onclick="viewIssues(${p.id})"><i class="fa-solid fa-list"></i> 檢查 Issue</button>
+                        <button class="btn-secondary btn-sm" onclick="createIssue(${p.id})"><i class="fa-solid fa-plus"></i> 提 Issue</button>
+                        <button class="btn-success btn-sm" onclick="acceptWork(${p.id})"><i class="fa-solid fa-check"></i> 驗收通過</button> 
+                        <button class="btn-danger btn-sm" onclick="rejectWork(${p.id})"><i class="fa-solid fa-xmark"></i> 退件</button>
+                        <button class="btn-secondary btn-sm" onclick="showSubmissionVersions(${p.id})"><i class="fa-solid fa-clock-rotate-left"></i> 版本</button>`;
                 }
             } else {
                 // Contractor
                 if (p.contractor_id === user.id) {
                     if (p.status === 'in_progress') {
-                        // Feature: Upload with file
-                        buttons += `<br>
-                            <input type="file" id="submit-file-${p.id}">
-                            <button class="sub-btn" onclick="submitWork(${p.id})">上傳結案</button>`;
+                        buttons += `
+                            <div style="margin-top:10px; display:flex; gap:5px; align-items:center;">
+                                <input type="file" id="submit-file-${p.id}" style="margin:0; width:auto;">
+                                <button class="btn-primary btn-sm" onclick="submitWork(${p.id})"><i class="fa-solid fa-upload"></i> 上傳結案</button>
+                            </div>`;
                     } else if (p.status === 'rejected') {
-                        // Feature: Re-upload
-                        buttons += `<br>
-                            <input type="file" id="submit-file-${p.id}">
-                            <button class="sub-btn" onclick="submitWork(${p.id})" style="background:#ff9800;">重新提交結案</button>
-                            <button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
+                        buttons += `
+                            <div style="margin-top:10px; display:flex; gap:5px; align-items:center;">
+                                <input type="file" id="submit-file-${p.id}" style="margin:0; width:auto;">
+                                <button class="btn-warning btn-sm" onclick="submitWork(${p.id})"><i class="fa-solid fa-rotate-right"></i> 重新上傳</button>
+                            </div>
+                            <button class="btn-secondary btn-sm" onclick="showSubmissionVersions(${p.id})">歷史版本</button>`;
                     } else if (p.status === 'submitted') {
-                        // Main: View Issues
-                        buttons += `<br>
-                            <button class="sub-btn" onclick="viewIssues(${p.id})">查看 Issue / 討論</button>
-                            <button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
+                        buttons += `
+                            <button class="btn-warning btn-sm" onclick="viewIssues(${p.id})"><i class="fa-regular fa-comments"></i> 討論 Issue</button>
+                            <button class="btn-secondary btn-sm" onclick="showSubmissionVersions(${p.id})">歷史版本</button>`;
                     }
                 }
             }
@@ -1091,4 +1093,4 @@
         }
     </script>
 </body>
-</html>
+</html>`

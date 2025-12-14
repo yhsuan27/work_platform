@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from database import engine, Base
 import models
 
-from routers import auth, projects, reviews  # 加入 reviews
+from routers import auth, projects
 
 
 # 建立所有資料表
@@ -37,7 +37,6 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 # 引入路由
 app.include_router(auth.router)
 app.include_router(projects.router)
-app.include_router(reviews.router)  # 加入 reviews
 
 @app.get("/")
 def root():
