@@ -1,9 +1,14 @@
+# main.py
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
 from database import engine, Base
 import models
+
 from routers import auth, projects, reviews  # 加入 reviews
+
 
 # 建立所有資料表
 Base.metadata.create_all(bind=engine)
@@ -23,8 +28,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 掛載靜態檔案
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# 專案根目錄（main.py 所在資料夾）
+BASE_DIR = Path(__file__).resolve().parent
+
+# 掛載靜態檔案：static 一定在專案根目錄底下
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 # 引入路由
 app.include_router(auth.router)
@@ -43,6 +51,7 @@ def root():
             "評價系統": "/reviews"
         }
     }
+
 
 @app.get("/health")
 def health_check():

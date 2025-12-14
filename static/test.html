@@ -42,7 +42,26 @@
         button:hover { background: #5568d3; }
         .hidden { display: none; }
 
-        /* --- 評論列表樣式 --- */
+        /* Feature 分支樣式 */
+        .sub-btn {
+            width: auto;
+            padding: 6px 10px;
+            margin-top: 5px;
+            font-size: 13px;
+            margin-right: 5px;
+        }
+        .version-list {
+            margin-top: 6px;
+            font-size: 13px;
+            padding-left: 4px;
+            border-left: 2px solid #ccc;
+        }
+        .version-list a {
+            text-decoration: underline;
+            color: #007bff;
+        }
+
+        /* Main 分支樣式 (評論) */
         .review-box {
             margin-top: 15px;
             padding-top: 10px;
@@ -141,6 +160,9 @@
         <input type="text" id="title" placeholder="專案標題">
         <textarea id="desc" placeholder="專案描述"></textarea>
         <input type="number" id="budget" placeholder="預算">
+        <label for="deadline">截止時間（限時競標）：</label>
+        <input type="datetime-local" id="deadline">
+
         <button onclick="createProject()">建立專案</button>
         <button onclick="loadMyProjects()">查看我的專案</button>
         <div id="clientProjects"></div>
@@ -157,15 +179,13 @@
         <div id="contractorProjects"></div>
         <button onclick="doLogout()">登出</button>
     </div>
-  
-    <!-- Issue 面板 -->
+   
     <div id="issuePanel" class="card hidden">
         <h2>Issue / 結案待處理事項</h2>
         <button onclick="closeIssuePanel()">關閉</button>
         <div id="issueContent" style="margin-top: 10px;"></div>
     </div>
 
-    <!-- 評價彈窗 -->
     <div id="reviewModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeReviewModal()">&times;</span>
@@ -258,7 +278,6 @@
                         r.demand_reasonableness,
                         r.acceptance_difficulty
                     ];
-                    // 過濾掉 null 的分數
                     const validScores = scores.filter(s => s !== null && s !== undefined);
                     
                     let finalScore = 0;
@@ -266,7 +285,6 @@
                         const sum = validScores.reduce((a, b) => a + b, 0);
                         finalScore = (sum / validScores.length).toFixed(1);
                     }
-                    // ---------------------------
 
                     html += `
                         <div class="review-item">
@@ -431,7 +449,7 @@
         }
 
         // ==========================================
-        //  【原有功能區】
+        //  【原有功能區 (含身分驗證)】
         // ==========================================
 
         function doRegister() {
@@ -448,7 +466,7 @@
                 body: JSON.stringify(data)
             })
             .then(r => r.json())
-            .then(d => {
+            .then(() => {
                 alert('註冊成功！請登入');
             })
             .catch(e => alert('錯誤：' + e));
@@ -468,6 +486,10 @@
             .then(r => r.json())
             .then(d => {
                 user = d.user;
+                if (!user) {
+                    alert('登入失敗');
+                    return;
+                }
                 document.getElementById('auth').classList.add('hidden');
                 
                 if (user.role === 'client') {
@@ -481,7 +503,7 @@
                 loadMyProjects();
                 displayAverageRatingArea(user.id);
             })
-            .catch(e => alert('登入失敗'));
+            .catch(() => alert('登入失敗'));
         }
 
         function doLogout() {
@@ -493,11 +515,24 @@
             window.location.reload(); 
         }
 
+        // ================== 專案建立 / 查詢 ==================
+
         function createProject() {
+            const title = document.getElementById('title').value;
+            const desc = document.getElementById('desc').value;
+            const budget = parseFloat(document.getElementById('budget').value);
+
+            const deadlineInput = document.getElementById('deadline').value;
+            let deadline = null;
+            if (deadlineInput) {
+                deadline = deadlineInput + ':00'; 
+            }
+
             const data = {
-                title: document.getElementById('title').value,
-                description: document.getElementById('desc').value,
-                budget: parseFloat(document.getElementById('budget').value)
+                title: title,
+                description: desc,
+                budget: budget,
+                deadline: deadline
             };
 
             fetch(API + '/projects/?client_id=' + user.id, {
@@ -506,16 +541,26 @@
                 body: JSON.stringify(data)
             })
             .then(r => r.json())
-            .then(d => {
+            .then(() => {
                 alert('專案建立成功！');
                 loadMyProjects();
             });
+        }
+
+        function formatDeadline(deadline) {
+            if (!deadline) return '未設定';
+            try {
+                return new Date(deadline).toLocaleString();
+            } catch {
+                return deadline;
+            }
         }
 
         function loadMyProjects() {
             fetch(API + '/projects/user/' + user.id)
             .then(r => r.json())
             .then(projects => {
+                // 使用 async/await 處理評價資料的獲取
                 const projectPromises = projects.map(async p => {
                      let clientRatingText = '';
                      let contractorRatingText = '';
@@ -527,10 +572,17 @@
 
                     const actionsHtml = await getActions(p);
 
+                    // 結案網址顯示邏輯
+                    const submissionLink = p.submission_file_url
+                            ? `<a href="${API}${p.submission_file_url}" target="_blank" rel="noopener">下載</a>`
+                            : '尚未結案';
+
                     return `<div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:3px solid #667eea;">
                         <strong>ID: ${p.id} - ${p.title}</strong><br>
                         ${p.description}<br>
-                        預算: ${p.budget} | 狀態: <strong>${p.status}</strong><br>
+                        預算: ${p.budget ?? '未設定'} | 狀態: <strong>${p.status}</strong><br>
+                        截止時間: ${formatDeadline(p.deadline)}<br>
+                        最新結案網址: ${submissionLink}<br>
                         
                         ${p.status === 'completed' && p.contractor_id ? 
                             `<div style="margin-top: 5px; color: #555;">
@@ -539,6 +591,7 @@
                              </div>` : ''}
                              
                         ${actionsHtml}
+                        <div id="versions-${p.id}" class="version-list"></div>
                     </div>`;
                 });
 
@@ -558,7 +611,6 @@
             .then(r => r.json())
             .then(projects => {
                 const projectPromises = projects.map(async p => {
-                    
                     const clientRatingHtml = await fetchAverageRating(p.client_id);
 
                     return `<div style="background:#f9f9f9; padding:10px; margin:10px 0; border-left:5px solid #e67e22;">
@@ -569,8 +621,13 @@
                         </div>
 
                         ${p.description}<br>
-                        預算: ${p.budget}
-                        <button onclick="makeProposal(${p.id})">提出報價</button>
+                        預算: ${p.budget ?? '未設定'}<br>
+                        截止時間: ${formatDeadline(p.deadline)}<br><br>
+                        
+                        報價金額：<input type="number" id="price-${p.id}" placeholder="金額"><br>
+                        提案說明：<input type="text" id="pdesc-${p.id}" placeholder="簡短說明"><br>
+                        上傳提案 PDF：<input type="file" id="pfile-${p.id}" accept="application/pdf"><br>
+                        <button class="sub-btn" onclick="makeProposal(${p.id})">提出報價</button>
                     </div>`;
                 });
 
@@ -580,21 +637,61 @@
             });
         }
 
-        function makeProposal(pid) {
-            const price = prompt('報價金額：');
-            const desc = prompt('提案說明：');
-            
-            fetch(API + '/projects/' + pid + '/proposals?contractor_id=' + user.id, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({project_id: pid, price: parseFloat(price), description: desc})
-            })
-            .then(r => r.json())
-            .then(d => alert('提案已送出！'));
+        // ================== 提案（含 PDF 上傳） ==================
+
+        async function makeProposal(pid) {
+            const priceInput = document.getElementById(`price-${pid}`);
+            const descInput  = document.getElementById(`pdesc-${pid}`);
+            const fileInput  = document.getElementById(`pfile-${pid}`);
+
+            const priceVal = parseFloat(priceInput.value);
+            const desc = descInput.value;
+            const file = fileInput.files[0];
+
+            if (isNaN(priceVal)) {
+                alert('請輸入有效的報價金額');
+                return;
+            }
+            if (!file) {
+                alert('請選擇要上傳的 PDF 檔案');
+                return;
+            }
+            if (file.type !== 'application/pdf') {
+                alert('僅接受 PDF 檔案');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('price', priceVal);
+            formData.append('description', desc);
+            formData.append('file', file);
+
+            try {
+                const resp = await fetch(
+                    API + '/projects/' + pid + '/proposals?contractor_id=' + user.id,
+                    {
+                        method: 'POST',
+                        body: formData
+                    }
+                );
+
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    alert('提案失敗：' + (data.detail || JSON.stringify(data)));
+                    return;
+                }
+
+                alert('提案已送出！(ID: ' + (data.proposal_id || '') + ')');
+            } catch (e) {
+                alert('提案失敗(網路錯誤)：' + e);
+            }
         }
 
+        // ================== 選擇接案人 & 結案 ==================
+
         function selectContractor(pid) {
-            fetch(API + '/projects/' + pid + '/proposals')
+            fetch(API + `/projects/${pid}/proposals`)
             .then(r => r.json())
             .then(async proposals => { 
                 
@@ -615,7 +712,7 @@
                         scoreText = "讀取失敗";
                     }
                     
-                    return `${i+1}. ID:${p.contractor_id} [評分: ${scoreText}] - $${p.price}\n   說明: ${p.description}`;
+                    return `${i+1}. 提案ID:${p.id} / 接案人ID:${p.contractor_id} [評分: ${scoreText}] - $${p.price}\n   說明: ${p.description}`;
                 });
 
                 const listItems = await Promise.all(listPromises);
@@ -637,17 +734,33 @@
             });
         }
 
-        function submitWork(pid) {
-            const url = prompt('結案檔案網址：');
-            fetch(API + '/projects/' + pid + '/submit', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({submission_file_url: url})
-            })
-            .then(() => {
-                alert('已提交！');
+        async function submitWork(pid) {
+            const fileInput = document.getElementById(`submit-file-${pid}`);
+            if (!fileInput || fileInput.files.length === 0) {
+                alert('請先選擇要上傳的結案檔案');
+                return;
+            }
+            const file = fileInput.files[0];
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const resp = await fetch(API + `/projects/${pid}/submit`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({}));
+                    throw new Error(data.detail || resp.statusText);
+                }
+
+                alert('已提交結案！');
                 loadMyProjects();
-            });
+            } catch (e) {
+                alert('上傳失敗：' + e);
+            }
         }
 
         function acceptWork(pid) {
@@ -676,7 +789,9 @@
 
         function rejectWork(pid) {
             const reason = prompt('退件原因：');
-            fetch(API + '/projects/' + pid + '/reject', {
+            if (!reason) return;
+
+            fetch(API + `/projects/${pid}/reject`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({rejection_reason: reason})
@@ -687,24 +802,69 @@
             });
         }
 
+        // ================== 結案版本列表（下載連結） ==================
+
+        function showSubmissionVersions(pid) {
+            fetch(API + `/projects/${pid}/submissions`)
+            .then(r => r.json())
+            .then(data => {
+                let list = [];
+                if (Array.isArray(data)) {
+                    list = data;
+                } else if (data && Array.isArray(data.versions)) {
+                    list = data.versions;
+                }
+
+                const container = document.getElementById(`versions-${pid}`);
+
+                if (!list || list.length === 0) {
+                    container.innerHTML = '目前沒有任何結案版本';
+                    return;
+                }
+
+                const html = list.map(v =>
+                    `<div>v${v.version}：<a href="${API}${v.submit_url}" target="_blank" rel="noopener">下載</a></div>`
+                ).join('');
+
+                container.innerHTML = html;
+            })
+            .catch(e => {
+                alert('讀取版本列表失敗：' + e);
+            });
+        }
+
+        // ================== 修改專案 (含截止時間) ==================
+
         function editProject(pid) {
             fetch(API + '/projects/' + pid)
             .then(r => r.json())
             .then(project => {
                 const newTitle = prompt('修改標題：', project.title);
                 if (!newTitle) return;
+
                 const newDesc = prompt('修改描述：', project.description);
                 if (!newDesc) return;
+
                 const newBudget = prompt('修改預算：', project.budget);
                 if (!newBudget) return;
-                
-                fetch(API + '/projects/' + pid, {
+
+                const newDeadlineRaw = prompt(
+                    '修改截止時間 (原值：' + formatDeadline(project.deadline) + ')\n格式：YYYY-MM-DD HH:MM，留空表示不變'
+                );
+                let deadline = project.deadline;
+                if (newDeadlineRaw) {
+                    const safe = newDeadlineRaw.replace(' ', 'T');
+                    deadline = safe + ':00'; 
+                }
+
+                fetch(API + `/projects/${pid}`, {
                     method: 'PUT',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         title: newTitle,
                         description: newDesc,
-                        budget: parseFloat(newBudget)
+                        budget: parseFloat(newBudget),
+                        deadline: deadline
                     })
                 })
                 .then(r => r.json())
@@ -716,7 +876,7 @@
             });
         }
 
-        // ========== Issue 前端功能 ==========
+        // ========== Issue 前端功能 (來自 Main) ==========
 
         function closeIssuePanel() {
             document.getElementById('issuePanel').classList.add('hidden');
@@ -856,12 +1016,12 @@
             .catch(e => alert('操作失敗：' + (e.detail || JSON.stringify(e))));
         }
 
-        // ========== 根據角色與專案狀態顯示按鈕 (合併修復版) ==========
+        // ========== 根據角色與專案狀態顯示按鈕 (整合功能版) ==========
 
         async function getActions(p) { 
             let buttons = '';
             
-            // 1. 如果專案已完成，顯示評價按鈕
+            // 1. 如果專案已完成，顯示評價按鈕 (Main) & 版本列表 (Feature)
             if (p.status === 'completed' && p.contractor_id) {
                 const ratedDivId = `rating-form-${p.id}`;
                 let ratedUserId, roleToRate;
@@ -885,31 +1045,45 @@
                     }
                     buttons += `<div id="${ratedDivId}"></div>`;
                 }
+                // Feature: 完成也顯示版本列表
+                buttons += `<button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
             }
             
             // 2. 根據角色顯示操作按鈕
             if (user.role === 'client') {
                 if (p.status === 'open') {
                     buttons += `<br>
-                        <button onclick="editProject(${p.id})">修改專案</button>
-                        <button onclick="selectContractor(${p.id})">選擇接案人</button>`;
+                        <button class="sub-btn" onclick="editProject(${p.id})">修改專案</button>
+                        <button class="sub-btn" onclick="selectContractor(${p.id})">選擇接案人</button>`;
                 } else if (p.status === 'submitted') {
-                    // 這裡合併了 Issue 功能和 接受/退件 功能
+                    // Main: Issue & Accept/Reject
+                    // Feature: Show versions
                     buttons += `<br>
-                        <button onclick="viewIssues(${p.id})">查看 / 管理 Issue</button>
-                        <button onclick="createIssue(${p.id})">新增 Issue</button>
-                        <button onclick="acceptWork(${p.id})" style="background:#4caf50;">接受</button> 
-                        <button onclick="rejectWork(${p.id})" style="background:#f44336;">退件</button>`;
+                        <button class="sub-btn" onclick="viewIssues(${p.id})">查看 / 管理 Issue</button>
+                        <button class="sub-btn" onclick="createIssue(${p.id})">新增 Issue</button>
+                        <button class="sub-btn" onclick="acceptWork(${p.id})" style="background:#4caf50;">接受</button> 
+                        <button class="sub-btn" onclick="rejectWork(${p.id})" style="background:#f44336;">退件</button>
+                        <button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
                 }
             } else {
                 // Contractor
                 if (p.contractor_id === user.id) {
                     if (p.status === 'in_progress') {
-                        buttons += `<br><button onclick="submitWork(${p.id})">上傳結案</button>`;
+                        // Feature: Upload with file
+                        buttons += `<br>
+                            <input type="file" id="submit-file-${p.id}">
+                            <button class="sub-btn" onclick="submitWork(${p.id})">上傳結案</button>`;
                     } else if (p.status === 'rejected') {
-                        buttons += `<br><button onclick="submitWork(${p.id})" style="background:#ff9800;">重新提交結案</button>`;
+                        // Feature: Re-upload
+                        buttons += `<br>
+                            <input type="file" id="submit-file-${p.id}">
+                            <button class="sub-btn" onclick="submitWork(${p.id})" style="background:#ff9800;">重新提交結案</button>
+                            <button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
                     } else if (p.status === 'submitted') {
-                        buttons += `<br><button onclick="viewIssues(${p.id})">查看 Issue / 討論</button>`;
+                        // Main: View Issues
+                        buttons += `<br>
+                            <button class="sub-btn" onclick="viewIssues(${p.id})">查看 Issue / 討論</button>
+                            <button class="sub-btn" onclick="showSubmissionVersions(${p.id})">結案版本列表</button>`;
                     }
                 }
             }

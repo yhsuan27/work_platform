@@ -1,15 +1,16 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from sqlalchemy.sql import func 
 import enum
 from database import Base
 
-# 定義使用者角色的列舉
+# ==================== Enum 定義 ====================
+
 class UserRole(str, enum.Enum):
     CLIENT = "client"          # 委託人
     CONTRACTOR = "contractor"  # 接案人
 
-# 定義專案狀態的列舉
 class ProjectStatus(str, enum.Enum):
     DRAFT = "draft"               # 草稿
     OPEN = "open"                 # 開放接案
@@ -18,11 +19,12 @@ class ProjectStatus(str, enum.Enum):
     COMPLETED = "completed"       # 已完成
     REJECTED = "rejected"         # 已退件
 
-class IssueStatus(str, enum.Enum): #新增
-    OPEN = "open"          # 尚待處理
-    RESOLVED = "resolved"  # 已處理完成
+class IssueStatus(str, enum.Enum): 
+    OPEN = "open"           # 尚待處理
+    RESOLVED = "resolved"   # 已處理完成
 
-# 使用者資料表
+# ==================== User (使用者) ====================
+
 class User(Base):
     __tablename__ = "users"
     
@@ -33,17 +35,27 @@ class User(Base):
     role = Column(Enum(UserRole), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # 關聯設定
-    created_projects = relationship("Project", back_populates="client", foreign_keys="Project.client_id")
-    contracted_projects = relationship("Project", back_populates="contractor", foreign_keys="Project.contractor_id")
+    # 專案關聯
+    created_projects = relationship(
+        "Project",
+        back_populates="client",
+        foreign_keys="Project.client_id"
+    )
+    contracted_projects = relationship(
+        "Project",
+        back_populates="contractor",
+        foreign_keys="Project.contractor_id"
+    )
     proposals = relationship("Proposal", back_populates="contractor")
     messages = relationship("Message", back_populates="sender")
 
-    # 評價關聯設定
+    # 評價關聯設定 (來自 main 分支)
     given_ratings = relationship("Rating", foreign_keys="Rating.rater_id", back_populates="rater")
     received_ratings = relationship("Rating", foreign_keys="Rating.rated_user_id", back_populates="rated_user")
 
-# 專案資料表
+
+# ==================== Project (專案) ====================
+
 class Project(Base):
     __tablename__ = "projects"
     
@@ -52,24 +64,50 @@ class Project(Base):
     description = Column(Text, nullable=False)
     budget = Column(Float)
     status = Column(Enum(ProjectStatus), default=ProjectStatus.DRAFT)
+    
     client_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     contractor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
+    
+    # 結案相關
     submission_file_url = Column(String(500), nullable=True)
     rejection_reason = Column(Text, nullable=True)
     
-    # 關聯設定
-    client = relationship("User", back_populates="created_projects", foreign_keys=[client_id])
-    contractor = relationship("User", back_populates="contracted_projects", foreign_keys=[contractor_id])
+    # ★ 限時競標截止時間 (來自 feature 分支)
+    deadline = Column(DateTime, nullable=True)  
+    
+    # 關聯
+    client = relationship(
+        "User",
+        back_populates="created_projects",
+        foreign_keys=[client_id]
+    )
+    contractor = relationship(
+        "User",
+        back_populates="contracted_projects",
+        foreign_keys=[contractor_id]
+    )
     proposals = relationship("Proposal", back_populates="project")
     messages = relationship("Message", back_populates="project")
-    issues = relationship("Issue", back_populates="project", cascade="all, delete-orphan") #新增
-
+    
+    # 新增關聯 (來自 main 分支)
+    issues = relationship("Issue", back_populates="project", cascade="all, delete-orphan") 
     ratings = relationship("Rating", back_populates="project")
 
-# 提案資料表（接案人的報價）
+    # ★ 一個專案有多個「結案」版本 (來自 feature 分支)
+    submission_versions = relationship(
+        "SubmissionVersion",
+        back_populates="project",
+        order_by="SubmissionVersion.version",
+        cascade="all, delete-orphan"
+    )
+
+
+# ==================== Proposal（報價提案） ====================
+
 class Proposal(Base):
     __tablename__ = "proposals"
     
@@ -80,11 +118,39 @@ class Proposal(Base):
     description = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # 關聯設定
+    # 關聯
     project = relationship("Project", back_populates="proposals")
     contractor = relationship("User", back_populates="proposals")
 
-class Issue(Base): #新增
+    # ★ 一個提案可以有多個 PDF 版本 (來自 feature 分支)
+    files = relationship(
+        "ProposalFile",
+        back_populates="proposal",
+        order_by="ProposalFile.version",
+        cascade="all, delete-orphan"
+    )
+
+
+# ==================== ProposalFile (提案 PDF 版本) ====================
+# (來自 feature 分支)
+
+class ProposalFile(Base):
+    __tablename__ = "proposal_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    proposal_id = Column(Integer, ForeignKey("proposals.id"), nullable=False)
+    original_filename = Column(String(255), nullable=False)   # 上傳時的檔名
+    stored_path = Column(String(500), nullable=False)         # 儲存在 static/proposals/... 的路徑
+    version = Column(Integer, nullable=False)                 # v1, v2, v3 ...
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    proposal = relationship("Proposal", back_populates="files")
+
+
+# ==================== Issue (待處理事項) ====================
+# (來自 main 分支)
+
+class Issue(Base): 
     __tablename__ = "issues"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -100,7 +166,8 @@ class Issue(Base): #新增
     created_by = relationship("User")
     comments = relationship("IssueComment", back_populates="issue", cascade="all, delete-orphan")
 
-class IssueComment(Base): #新增
+
+class IssueComment(Base): 
     __tablename__ = "issue_comments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -113,7 +180,8 @@ class IssueComment(Base): #新增
     sender = relationship("User")
 
 
-# 訊息資料表（溝通用）
+# ==================== Message（溝通訊息） ====================
+
 class Message(Base):
     __tablename__ = "messages"
     
@@ -123,15 +191,36 @@ class Message(Base):
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # 關聯設定
     project = relationship("Project", back_populates="messages")
     sender = relationship("User", back_populates="messages")
 
-    # work_platform/work_platform/models.py (新增在檔案末尾)
 
-# work_platform/work_platform/models.py (新增在檔案末尾)
+# ==================== SubmissionVersion (結案版本歷史) ====================
+# (來自 feature 分支)
 
-# 評價資料表
+class SubmissionVersion(Base):
+    __tablename__ = "submission_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    version = Column(Integer, nullable=False)
+    submit_url = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    project = relationship(
+        "Project",
+        back_populates="submission_versions"
+    )
+
+
+# ==================== Rating (評價) ====================
+# (來自 main 分支)
+
 class Rating(Base):
     __tablename__ = "ratings"
     
