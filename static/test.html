@@ -852,32 +852,89 @@
             } catch (e) { alert('提案失敗：' + e); }
         }
 
+        // ================== 選擇接案人 (含詳細評價顯示) ==================
+
         function selectContractor(pid) {
+            // 按鈕顯示讀取中
+            const btn = document.activeElement; 
+            if(btn && btn.tagName === 'BUTTON') btn.innerText = '讀取評價中...';
+
             fetch(API + `/projects/${pid}/proposals`)
             .then(r => r.json())
             .then(async proposals => { 
-                if (proposals.length === 0) { alert("目前還沒有人提案喔！"); return; }
+                if(btn && btn.tagName === 'BUTTON') btn.innerText = '選擇接案人'; // 還原按鈕
 
+                if (proposals.length === 0) {
+                    alert("⚠️ 目前還沒有人提案喔！");
+                    return;
+                }
+
+                // 平行讀取所有提案人的「詳細評價」
                 const listPromises = proposals.map(async (p, i) => {
-                    let scoreText = "無評價";
+                    let scoreInfo = "尚無評分";
+                    let commentsPreview = "   (暫無文字評論)";
+
                     try {
-                        const res = await fetch(API + '/projects/user/' + p.contractor_id + '/average-rating');
-                        const data = await res.json();
-                        if (data.total_ratings > 0) scoreText = `${data.average_score}★ (${data.total_ratings}評)`;
-                    } catch (e) {}
-                    return `${i+1}. 提案ID:${p.id} / 接案人ID:${p.contractor_id} [${scoreText}] - $${p.price}\n   說明: ${p.description}`;
+                        // 1. 抓取詳細評論列表
+                        const res = await fetch(API + `/projects/user/${p.contractor_id}/reviews`);
+                        const reviews = await res.json();
+
+                        if (reviews.length > 0) {
+                            // 計算平均分
+                            const totalScore = reviews.reduce((acc, cur) => acc + cur.cooperation_attitude, 0); // 簡化：只算合作態度平均，或你可以用後端算好的
+                            
+                            // 篩選出「有寫字」的評論，只取最新的 2 筆
+                            const textReviews = reviews
+                                .filter(r => r.comment && r.comment.trim() !== "")
+                                .slice(0, 2) // 只顯示前 2 筆，避免視窗太長
+                                .map(r => `   💬 "${r.comment}"`)
+                                .join('\n');
+
+                            // 組合顯示文字
+                            scoreInfo = `⭐ ${reviews.length} 筆評價`;
+                            if (textReviews) {
+                                commentsPreview = textReviews;
+                            }
+                        }
+                    } catch (e) {
+                        commentsPreview = "   (讀取失敗)";
+                    }
+                    
+                    // 最終排版
+                    return `【選項 ${i+1}】 接案人 ID: ${p.contractor_id}\n` +
+                           `💰 報價: $${p.price} | ${scoreInfo}\n` +
+                           `📄 提案: ${p.description}\n` +
+                           `📝 歷史評價參考:\n${commentsPreview}\n` +
+                           `----------------------------------`;
                 });
 
                 const listItems = await Promise.all(listPromises);
-                const choice = prompt('請輸入編號選擇接案人：\n\n' + listItems.join('\n'));
+                
+                // 顯示選擇視窗
+                const listStr = listItems.join('\n');
+                const choice = prompt('請輸入「選項編號」選擇接案人：\n\n' + listStr);
                 
                 if (choice) {
                     const index = parseInt(choice) - 1;
                     if (index >= 0 && index < proposals.length) {
-                        fetch(API + '/projects/' + pid + '/select-contractor?contractor_id=' + proposals[index].contractor_id, {method: 'POST'})
-                        .then(() => { alert('已選擇接案人！'); loadMyProjects(); });
+                        const selected = proposals[index];
+                        // 二次確認
+                        if(confirm(`確定要選擇 ID: ${selected.contractor_id} 嗎？\n專案將進入「進行中」狀態。`)) {
+                            fetch(API + '/projects/' + pid + '/select-contractor?contractor_id=' + selected.contractor_id, {method: 'POST'})
+                            .then(() => {
+                                alert('✅ 已成功選擇接案人！');
+                                loadMyProjects();
+                            })
+                            .catch(e => alert('選擇失敗：' + e));
+                        }
+                    } else {
+                        alert('❌ 編號無效，請重新輸入。');
                     }
                 }
+            })
+            .catch(e => {
+                alert('系統錯誤：' + e);
+                if(btn) btn.innerText = '選擇接案人';
             });
         }
 
@@ -938,18 +995,78 @@
             });
         }
 
+        // ================== 修改專案 (含截止時間修正版) ==================
+
         function editProject(pid) {
-            // (為了簡化，這裡維持 prompt，實際專案建議做成 Modal)
-            fetch(API + '/projects/' + pid).then(r => r.json()).then(p => {
-                const newTitle = prompt('修改標題：', p.title); if(!newTitle) return;
-                const newDesc = prompt('修改描述：', p.description);
-                const newBudget = prompt('修改預算：', p.budget);
-                
+            fetch(API + '/projects/' + pid)
+            .then(r => r.json())
+            .then(project => {
+                // 1. 修改標題
+                const newTitle = prompt('修改標題：', project.title);
+                if (newTitle === null) return; // 按取消則中止
+
+                // 2. 修改描述
+                const newDesc = prompt('修改描述：', project.description);
+                if (newDesc === null) return;
+
+                // 3. 修改預算
+                const newBudget = prompt('修改預算：', project.budget);
+                if (newBudget === null) return;
+
+                // 4. 修改截止時間 (處理日期格式)
+                // 顯示目前的設定值，方便使用者參考
+                let currentDeadlineStr = "";
+                if (project.deadline) {
+                    // 把 "2025-12-31T23:59:00" 變成 "2025-12-31 23:59" 方便閱讀
+                    currentDeadlineStr = project.deadline.replace('T', ' ').slice(0, 16);
+                }
+
+                const newDeadlineRaw = prompt(
+                    `修改截止時間 (目前: ${currentDeadlineStr || '未設定'})\n請輸入格式：YYYY-MM-DD HH:MM\n(若不修改請直接按確定)`,
+                    currentDeadlineStr
+                );
+
+                let finalDeadline = project.deadline; // 預設維持原狀
+
+                if (newDeadlineRaw !== null && newDeadlineRaw.trim() !== "") {
+                    // 簡單處理：把空白換成 T，並補上秒數，變成 ISO 格式
+                    const safe = newDeadlineRaw.trim().replace(' ', 'T');
+                    
+                    // 檢查格式是否看起來像日期 (簡單檢查)
+                    if (safe.length >= 10) {
+                        // 如果使用者只輸入日期 "2025-12-31"，補上時間
+                        if (!safe.includes('T')) {
+                            finalDeadline = safe + 'T23:59:00';
+                        } else {
+                            // 如果有時間 "2025-12-31T12:00"，補上秒數
+                            finalDeadline = safe.length === 16 ? safe + ':00' : safe;
+                        }
+                    }
+                } else if (newDeadlineRaw === "") {
+                    // 如果使用者清空欄位，代表取消截止時間
+                    finalDeadline = null;
+                }
+
+                // 送出修改請求
                 fetch(API + `/projects/${pid}`, {
                     method: 'PUT',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ title: newTitle, description: newDesc, budget: parseFloat(newBudget) })
-                }).then(() => { alert('已更新'); loadMyProjects(); });
+                    body: JSON.stringify({
+                        title: newTitle,
+                        description: newDesc,
+                        budget: parseFloat(newBudget),
+                        deadline: finalDeadline
+                    })
+                })
+                .then(r => {
+                    if (!r.ok) throw new Error('修改失敗');
+                    return r.json();
+                })
+                .then(() => {
+                    alert('✅ 專案已成功更新！');
+                    loadMyProjects();
+                })
+                .catch(e => alert('更新錯誤：' + e));
             });
         }
 
